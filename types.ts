@@ -34,6 +34,15 @@ export interface Admin {
   role: AdminRole;
 }
 
+export interface Notice {
+  id: string;
+  title: string;
+  message: string;
+  date: string;
+  priority: 'High' | 'Normal';
+  active: boolean;
+}
+
 export interface AuthState {
   isAdmin: boolean;
   user: Admin | null;

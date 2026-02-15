@@ -1,8 +1,9 @@
 
-import { Media, Category, Admin, AdminRole } from '../types';
+import { Media, Category, Admin, AdminRole, Notice } from '../types';
 
 const MEDIA_KEY = 'faithstream_media';
 const ADMIN_KEY = 'faithstream_admins';
+const NOTICE_KEY = 'faithstream_notices';
 
 const DEFAULT_MEDIA: Media[] = [
   {
@@ -37,6 +38,25 @@ const DEFAULT_MEDIA: Media[] = [
 
 const DEFAULT_ADMINS: Admin[] = [
   { id: 'admin-1', email: 'admin@church.com', role: AdminRole.FULL_ACCESS }
+];
+
+const DEFAULT_NOTICES: Notice[] = [
+  {
+    id: 'n1',
+    title: 'Mid-Week Communion Service',
+    message: 'Join us this Wednesday for a special communion service as we partake in the table of the Lord. Time: 6:00 PM.',
+    date: new Date().toISOString(),
+    priority: 'High',
+    active: true
+  },
+  {
+    id: 'n2',
+    title: 'Youth Aflame Summit',
+    message: 'Calling all youths! The annual Youth Aflame Summit is here. Theme: "Dominion". Don\'t miss out!',
+    date: new Date().toISOString(),
+    priority: 'Normal',
+    active: true
+  }
 ];
 
 export const db = {
@@ -121,5 +141,30 @@ export const db = {
     const admins = db.getAdmins();
     if (admins.length <= 1) return; // Prevent deleting the last admin
     localStorage.setItem(ADMIN_KEY, JSON.stringify(admins.filter(a => a.id !== id)));
+  },
+
+  // Notice Board Methods
+  getNotices: (): Notice[] => {
+    const data = localStorage.getItem(NOTICE_KEY);
+    if (!data) {
+      localStorage.setItem(NOTICE_KEY, JSON.stringify(DEFAULT_NOTICES));
+      return DEFAULT_NOTICES;
+    }
+    return JSON.parse(data);
+  },
+
+  addNotice: (notice: Omit<Notice, 'id'>) => {
+    const notices = db.getNotices();
+    const newNotice: Notice = {
+      ...notice,
+      id: Math.random().toString(36).substr(2, 9)
+    };
+    localStorage.setItem(NOTICE_KEY, JSON.stringify([newNotice, ...notices]));
+    return newNotice;
+  },
+
+  deleteNotice: (id: string) => {
+    const notices = db.getNotices();
+    localStorage.setItem(NOTICE_KEY, JSON.stringify(notices.filter(n => n.id !== id)));
   }
 };

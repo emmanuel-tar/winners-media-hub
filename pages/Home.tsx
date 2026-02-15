@@ -1,9 +1,9 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Play, ArrowRight, Music, Heart, Mic2 } from 'lucide-react';
+import { Play, ArrowRight, Music, Heart, Mic2, Bell, CalendarClock, AlertCircle } from 'lucide-react';
 import { db } from '../services/db';
-import { Media } from '../types';
+import { Media, Notice } from '../types';
 
 interface HomeProps {
   onPlay: (media: Media) => void;
@@ -11,9 +11,11 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = ({ onPlay }) => {
   const [recentMedia, setRecentMedia] = React.useState<Media[]>([]);
+  const [notices, setNotices] = React.useState<Notice[]>([]);
 
   React.useEffect(() => {
     setRecentMedia(db.getMedia().slice(0, 3));
+    setNotices(db.getNotices().filter(n => n.active).slice(0, 4));
   }, []);
 
   return (
@@ -52,6 +54,44 @@ const Home: React.FC<HomeProps> = ({ onPlay }) => {
           </div>
         </div>
       </section>
+
+      {/* Notice Board Section */}
+      {notices.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-amber-50 rounded-3xl p-8 border border-amber-100 shadow-sm">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="bg-amber-100 p-2 rounded-lg">
+                <Bell className="h-6 w-6 text-amber-700" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-amber-900 font-serif">Church Notice Board</h2>
+                <p className="text-sm text-amber-700/70 font-medium">Important announcements and upcoming activities.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {notices.map((notice) => (
+                <div key={notice.id} className={`bg-white p-5 rounded-2xl border ${notice.priority === 'High' ? 'border-l-4 border-l-red-500 border-t-slate-100 border-r-slate-100 border-b-slate-100' : 'border-slate-100'} shadow-sm hover:shadow-md transition-shadow`}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      <span>{new Date(notice.date).toLocaleDateString()}</span>
+                    </div>
+                    {notice.priority === 'High' && (
+                      <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide flex items-center">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        Important
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-2 font-serif">{notice.title}</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">{notice.message}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Featured/Recent Messages */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

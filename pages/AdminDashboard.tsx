@@ -1,9 +1,9 @@
 
 import React from 'react';
-import { Plus, Trash2, Edit3, BarChart3, Upload, Loader2, Sparkles, CheckCircle, X, ImagePlus, FileImage, Play, Headphones, CloudUpload, User, Calendar, Download, Users, ShieldCheck, Mail, AlertCircle, Save, ShieldAlert, Eye, Lock, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
+import { Plus, Trash2, Edit3, BarChart3, Upload, Loader2, Sparkles, CheckCircle, X, ImagePlus, FileImage, Play, Headphones, CloudUpload, User, Calendar, Download, Users, ShieldCheck, Mail, AlertCircle, Save, ShieldAlert, Eye, Lock, ArrowUp, ArrowDown, ArrowUpDown, Search, Bell, Megaphone } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/gemini';
-import { Media, Category, Admin, AdminRole } from '../types';
+import { Media, Category, Admin, AdminRole, Notice } from '../types';
 
 interface AdminDashboardProps {
   onPlay?: (media: Media) => void;
@@ -27,11 +27,15 @@ const MAX_AUDIO_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) => {
-  const [activeTab, setActiveTab] = React.useState<'library' | 'users'>('library');
+  const [activeTab, setActiveTab] = React.useState<'library' | 'users' | 'notices'>('library');
   const [mediaList, setMediaList] = React.useState<Media[]>([]);
   const [adminList, setAdminList] = React.useState<Admin[]>([]);
+  const [noticeList, setNoticeList] = React.useState<Notice[]>([]);
+  
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
+  const [isNoticeModalOpen, setIsNoticeModalOpen] = React.useState(false);
+  
   const [isGenerating, setIsGenerating] = React.useState(false);
   
   // Sorting State
@@ -55,9 +59,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const [adminEmailForm, setAdminEmailForm] = React.useState('');
   const [adminRoleForm, setAdminRoleForm] = React.useState<AdminRole>(AdminRole.EDITOR);
 
+  // Notice Form State
+  const [noticeForm, setNoticeForm] = React.useState({
+    title: '',
+    message: '',
+    date: new Date().toISOString().split('T')[0],
+    priority: 'Normal' as 'High' | 'Normal',
+    active: true
+  });
+
   // Role Permissions
   const canEditMedia = currentUser.role === AdminRole.FULL_ACCESS || currentUser.role === AdminRole.EDITOR;
   const canManageAdmins = currentUser.role === AdminRole.FULL_ACCESS;
+  const canManageNotices = currentUser.role === AdminRole.FULL_ACCESS || currentUser.role === AdminRole.EDITOR;
 
   const initialFormState = {
     title: '',
@@ -75,6 +89,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   React.useEffect(() => {
     setMediaList(db.getMedia());
     setAdminList(db.getAdmins());
+    setNoticeList(db.getNotices());
   }, []);
 
   const closeModal = () => {
@@ -94,6 +109,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setEditingAdminId(null);
     setAdminEmailForm('');
     setAdminRoleForm(AdminRole.EDITOR);
+  };
+
+  const closeNoticeModal = () => {
+    setIsNoticeModalOpen(false);
+    setNoticeForm({
+        title: '',
+        message: '',
+        date: new Date().toISOString().split('T')[0],
+        priority: 'Normal',
+        active: true
+    });
   };
 
   const validate = (): boolean => {
@@ -230,6 +256,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     if (confirm('Are you sure you want to revoke this user\'s admin privileges?')) {
       db.removeAdmin(id);
       setAdminList(db.getAdmins());
+    }
+  };
+
+  const handleNoticeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!noticeForm.title || !noticeForm.message) return;
+    
+    db.addNotice(noticeForm);
+    setNoticeList(db.getNotices());
+    closeNoticeModal();
+  };
+
+  const handleDeleteNotice = (id: string) => {
+    if (confirm('Delete this announcement?')) {
+      db.deleteNotice(id);
+      setNoticeList(db.getNotices());
     }
   };
 
@@ -374,7 +416,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
           </div>
         </div>
         <div className="flex gap-3">
-          {canManageAdmins && (
+           {activeTab === 'notices' && canManageNotices && (
+            <button
+              onClick={() => setIsNoticeModalOpen(true)}
+              className="flex items-center space-x-2 px-4 py-2 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 transition-all shadow-lg shadow-amber-100"
+            >
+              <Megaphone className="h-4 w-4" />
+              <span>Add Notice</span>
+            </button>
+          )}
+          {activeTab === 'users' && canManageAdmins && (
             <button
               onClick={() => { setEditingAdminId(null); setAdminEmailForm(''); setAdminRoleForm(AdminRole.EDITOR); setIsAdminModalOpen(true); }}
               className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all shadow-sm"
@@ -383,7 +434,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
               <span>Add Admin</span>
             </button>
           )}
-          {canEditMedia && (
+          {activeTab === 'library' && canEditMedia && (
             <button
               onClick={handleAddNew}
               className="flex items-center space-x-2 px-6 py-2 bg-red-700 text-white font-bold rounded-xl hover:bg-red-800 transition-all shadow-lg shadow-red-100"
@@ -405,6 +456,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
         >
           Message Library
         </button>
+         <button
+          onClick={() => setActiveTab('notices')}
+          className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'notices' ? 'bg-white text-red-700 shadow-md' : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Announcements
+        </button>
         {canManageAdmins && (
           <button
             onClick={() => setActiveTab('users')}
@@ -417,7 +476,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
         )}
       </div>
 
-      {activeTab === 'library' || !canManageAdmins ? (
+      {activeTab === 'library' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
@@ -612,7 +671,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
             </div>
           </div>
         </>
-      ) : (
+      )}
+
+      {activeTab === 'users' && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm max-w-4xl">
           <div className="px-6 py-4 border-b border-slate-100 bg-red-50/30 flex items-center justify-between">
             <h2 className="font-bold text-red-900 uppercase tracking-widest text-sm">Authorized Administrators</h2>
@@ -670,6 +731,72 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+       {activeTab === 'notices' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm max-w-4xl">
+          <div className="px-6 py-4 border-b border-slate-100 bg-amber-50/30 flex items-center justify-between">
+            <h2 className="font-bold text-amber-900 uppercase tracking-widest text-sm">Notice Board Database</h2>
+            <span className="text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1 rounded-full">{noticeList.length} Active</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-6 py-5">Announcement Title</th>
+                  <th className="px-6 py-5">Date</th>
+                  <th className="px-6 py-5">Priority</th>
+                  <th className="px-6 py-5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100/50">
+                {noticeList.map((notice) => (
+                  <tr 
+                    key={notice.id} 
+                    className="transition-all even:bg-slate-50/40 hover:bg-amber-50/40"
+                  >
+                    <td className="px-6 py-5">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-slate-900">{notice.title}</span>
+                        <span className="text-xs text-slate-500 line-clamp-1">{notice.message}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                       <span className="text-xs font-bold text-slate-600">{new Date(notice.date).toLocaleDateString()}</span>
+                    </td>
+                    <td className="px-6 py-5">
+                      {notice.priority === 'High' ? (
+                        <span className="bg-red-100 text-red-700 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wide">High</span>
+                      ) : (
+                        <span className="bg-slate-100 text-slate-600 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wide">Normal</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      {canManageNotices ? (
+                        <button 
+                          onClick={() => handleDeleteNotice(notice.id)}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 text-red-600 bg-white border border-red-100 rounded-lg text-xs font-bold hover:bg-red-50 transition-all shadow-sm ml-auto"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      ) : (
+                        <Lock className="h-4 w-4 text-slate-300 ml-auto" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {noticeList.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                      No active announcements
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -754,6 +881,79 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                   className="px-6 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200"
                 >
                   Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Notice Board Modal */}
+      {isNoticeModalOpen && canManageNotices && (
+         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-amber-950/60 backdrop-blur-sm" onClick={closeNoticeModal} />
+          <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-amber-50">
+              <h3 className="text-xl font-bold text-amber-900 font-serif">
+                Create Announcement
+              </h3>
+              <button onClick={closeNoticeModal} className="text-slate-400 hover:text-amber-700">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <form onSubmit={handleNoticeSubmit} className="p-8 space-y-6">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Title</label>
+                <input
+                  type="text"
+                  required
+                  value={noticeForm.title}
+                  onChange={(e) => setNoticeForm({...noticeForm, title: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-600 outline-none text-slate-900 font-bold"
+                  placeholder="e.g. Communion Service"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Message Detail</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={noticeForm.message}
+                  onChange={(e) => setNoticeForm({...noticeForm, message: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-600 outline-none text-slate-900 font-medium resize-none"
+                  placeholder="Enter the full announcement details..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={noticeForm.date}
+                    onChange={(e) => setNoticeForm({...noticeForm, date: e.target.value})}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-600 outline-none text-slate-900 font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase ml-1">Priority</label>
+                  <select
+                    value={noticeForm.priority}
+                    onChange={(e) => setNoticeForm({...noticeForm, priority: e.target.value as 'High' | 'Normal'})}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-600 outline-none text-slate-900 font-bold"
+                  >
+                    <option value="Normal">Normal</option>
+                    <option value="High">High Priority</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="flex-grow py-4 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 transition-all shadow-xl shadow-amber-100"
+                >
+                  Post Notice
                 </button>
               </div>
             </form>
@@ -865,68 +1065,90 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                     {/* Audio File */}
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Audio Content (MP3) <span className="text-red-500">*</span></label>
-                      <div className={`relative border-2 border-dashed rounded-2xl p-4 transition-all ${showSuccess ? 'border-green-200 bg-green-50 shadow-inner' : 'border-red-100 hover:border-red-300 bg-red-50/20'}`}>
-                        {isUploadingFile ? (
-                          <div className="space-y-3 py-2 animate-pulse">
-                            <div className="flex justify-between items-center text-[10px] font-bold text-red-700 uppercase">
-                              <span>Uploading audio...</span>
-                              <span>{uploadProgress}%</span>
+                      
+                      {!formData.fileUrl && !isUploadingFile ? (
+                        <div className="border-2 border-dashed border-slate-200 hover:border-red-200 rounded-2xl p-6 transition-all bg-slate-50 hover:bg-red-50/10 group">
+                           <label className="flex flex-col items-center justify-center cursor-pointer space-y-3">
+                            <div className="bg-white p-3 rounded-full shadow-sm group-hover:shadow-md transition-all group-hover:scale-110">
+                              <CloudUpload className="h-6 w-6 text-red-700/60 group-hover:text-red-700" />
                             </div>
-                            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                              <div className="h-full bg-red-700 transition-all duration-300 ease-out" style={{ width: `${uploadProgress}%` }} />
-                            </div>
-                          </div>
-                        ) : showSuccess ? (
-                          <div className="flex items-center justify-between py-2 text-green-700 font-bold text-xs uppercase animate-in zoom-in duration-300">
-                            <div className="flex items-center">
-                              <CheckCircle className="h-5 w-5 mr-2" />
-                              <span>Audio File Verified</span>
-                            </div>
-                            <label className="text-[10px] text-green-600 underline cursor-pointer hover:text-green-800">
-                              Replace
-                              <input type="file" accept="audio/mpeg" className="hidden" onChange={handleFileChange} />
-                            </label>
-                          </div>
-                        ) : (
-                          <label className="flex flex-col items-center justify-center cursor-pointer space-y-2 py-4 group">
-                            <CloudUpload className="h-6 w-6 text-red-700/60 group-hover:text-red-700 group-hover:scale-110 transition-all" />
-                            <span className="text-[10px] font-bold text-red-800 uppercase tracking-widest">Select MP3 Audio</span>
+                            <span className="text-[10px] font-bold text-slate-500 group-hover:text-red-700 uppercase tracking-widest transition-colors">Select MP3 File</span>
                             <input type="file" accept="audio/mpeg" className="hidden" onChange={handleFileChange} />
                           </label>
-                        )}
-                      </div>
+                        </div>
+                      ) : isUploadingFile ? (
+                        <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
+                          <div className="flex justify-between items-center mb-2">
+                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center">
+                               <Loader2 className="h-3 w-3 mr-1.5 animate-spin text-red-600" />
+                               Uploading...
+                             </span>
+                             <span className="text-xs font-bold text-red-700">{uploadProgress}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                             <div className="h-full bg-red-600 transition-all duration-300 ease-out rounded-full" style={{ width: `${uploadProgress}%` }} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between animate-in fade-in zoom-in duration-300">
+                          <div className="flex items-center space-x-3 text-green-800">
+                            <div className="bg-green-100 p-1.5 rounded-full border border-green-200">
+                              <CheckCircle className="h-4 w-4" />
+                            </div>
+                            <div>
+                               <p className="text-xs font-bold uppercase tracking-wide">Upload Complete</p>
+                               <p className="text-[10px] text-green-600 font-medium">MP3 ready for publishing</p>
+                            </div>
+                          </div>
+                          <label className="cursor-pointer px-3 py-1.5 bg-white border border-green-100 rounded-lg text-[10px] font-bold text-slate-500 hover:text-red-700 uppercase tracking-widest transition-all shadow-sm hover:shadow">
+                            Change
+                            <input type="file" accept="audio/mpeg" className="hidden" onChange={handleFileChange} />
+                          </label>
+                        </div>
+                      )}
                     </div>
 
                     {/* Thumbnail Image */}
-                    <div className="space-y-2">
+                     <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Display Image <span className="text-red-500">*</span></label>
-                      <div className={`relative border-2 border-dashed rounded-2xl p-4 transition-all ${formData.thumbnailUrl ? 'border-amber-200 bg-amber-50/30' : 'border-red-100 hover:border-red-300 bg-red-50/20'}`}>
-                        {isUploadingThumb ? (
-                          <div className="flex flex-col items-center justify-center py-4 space-y-2">
-                            <Loader2 className="h-6 w-6 text-amber-600 animate-spin" />
-                            <span className="text-[10px] font-bold text-amber-700 uppercase">Processing...</span>
-                          </div>
-                        ) : formData.thumbnailUrl ? (
-                          <div className="relative group animate-in fade-in duration-500">
-                            <img src={formData.thumbnailUrl} className="w-full h-12 object-cover rounded-lg shadow-sm" alt="" />
-                            {showThumbSuccess && (
-                               <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full p-0.5 shadow-md">
-                                 <CheckCircle className="h-3 w-3" />
+                      
+                       <div className={`relative border-2 border-dashed rounded-2xl transition-all overflow-hidden ${formData.thumbnailUrl ? 'border-none' : 'border-slate-200 hover:border-red-200 bg-slate-50'}`}>
+                         {isUploadingThumb ? (
+                            <div className="h-32 flex flex-col items-center justify-center bg-slate-50">
+                               <Loader2 className="h-8 w-8 text-red-600 animate-spin mb-2" />
+                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Optimizing Image...</span>
+                            </div>
+                         ) : formData.thumbnailUrl ? (
+                            <div className="relative group h-32 sm:h-40 w-full animate-in fade-in">
+                               <img src={formData.thumbnailUrl} className="w-full h-full object-cover rounded-2xl shadow-sm" alt="Thumbnail preview" />
+                               <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center rounded-2xl backdrop-blur-sm">
+                                  <label className="cursor-pointer transform scale-90 group-hover:scale-100 transition-all duration-300">
+                                      <div className="bg-white/10 hover:bg-white/20 border border-white/30 text-white px-4 py-2 rounded-xl backdrop-blur-md flex items-center space-x-2">
+                                         <ImagePlus className="h-4 w-4" />
+                                         <span className="text-xs font-bold uppercase tracking-wide">Replace Cover</span>
+                                      </div>
+                                      <input type="file" accept="image/*" className="hidden" onChange={handleThumbnailChange} />
+                                  </label>
                                </div>
-                            )}
-                            <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-lg cursor-pointer transition-opacity">
-                              <ImagePlus className="h-4 w-4 text-white" />
-                              <input type="file" accept="image/*" className="hidden" onChange={handleThumbnailChange} />
+                               
+                               {showThumbSuccess && (
+                                 <div className="absolute top-3 right-3 bg-green-500 text-white px-3 py-1.5 rounded-full shadow-lg flex items-center space-x-1.5 animate-in slide-in-from-top-2 fade-in duration-500">
+                                   <CheckCircle className="h-3.5 w-3.5" />
+                                   <span className="text-[10px] font-bold uppercase tracking-wide">Verified</span>
+                                 </div>
+                               )}
+                            </div>
+                         ) : (
+                            <label className="flex flex-col items-center justify-center cursor-pointer py-8 group">
+                               <div className="bg-white p-3 rounded-full shadow-sm group-hover:shadow-md transition-all group-hover:scale-110 mb-3">
+                                  <FileImage className="h-6 w-6 text-red-700/60 group-hover:text-red-700" />
+                               </div>
+                               <span className="text-[10px] font-bold text-slate-500 group-hover:text-red-700 uppercase tracking-widest transition-colors">Upload Cover Image</span>
+                               <span className="text-[9px] text-slate-400 mt-1">Recommended: 16:9 or 1:1 JPG/PNG</span>
+                               <input type="file" accept="image/*" className="hidden" onChange={handleThumbnailChange} />
                             </label>
-                          </div>
-                        ) : (
-                          <label className="flex flex-col items-center justify-center cursor-pointer space-y-2 py-4 group">
-                            <FileImage className="h-6 w-6 text-red-700/60 group-hover:text-red-700 group-hover:scale-110 transition-all" />
-                            <span className="text-[10px] font-bold text-red-800 uppercase tracking-widest">Upload Cover</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleThumbnailChange} />
-                          </label>
-                        )}
-                      </div>
+                         )}
+                       </div>
                     </div>
                   </div>
                 </div>
