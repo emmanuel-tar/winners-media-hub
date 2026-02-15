@@ -1,0 +1,125 @@
+
+import { Media, Category, Admin, AdminRole } from '../types';
+
+const MEDIA_KEY = 'faithstream_media';
+const ADMIN_KEY = 'faithstream_admins';
+
+const DEFAULT_MEDIA: Media[] = [
+  {
+    id: '1',
+    title: 'The Power of Grace',
+    preacher: 'Pastor John Doe',
+    category: Category.SERMON,
+    description: 'An inspiring message about the transformative power of grace in our daily lives.',
+    datePreached: '2023-10-15',
+    fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    thumbnailUrl: 'https://picsum.photos/seed/sermon1/800/600',
+    duration: '45:20',
+    playCount: 1250,
+    downloadCount: 450,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: '2',
+    title: 'Morning Worship Session',
+    preacher: 'Faith Choir',
+    category: Category.WORSHIP,
+    description: 'A soul-stirring worship session to start your week with praise.',
+    datePreached: '2023-11-01',
+    fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+    thumbnailUrl: 'https://picsum.photos/seed/worship1/800/600',
+    duration: '15:10',
+    playCount: 3400,
+    downloadCount: 890,
+    createdAt: new Date().toISOString()
+  }
+];
+
+const DEFAULT_ADMINS: Admin[] = [
+  { id: 'admin-1', email: 'admin@church.com', role: AdminRole.FULL_ACCESS }
+];
+
+export const db = {
+  // Media Methods
+  getMedia: (): Media[] => {
+    const data = localStorage.getItem(MEDIA_KEY);
+    if (!data) {
+      localStorage.setItem(MEDIA_KEY, JSON.stringify(DEFAULT_MEDIA));
+      return DEFAULT_MEDIA;
+    }
+    return JSON.parse(data);
+  },
+
+  saveMedia: (media: Media[]) => {
+    localStorage.setItem(MEDIA_KEY, JSON.stringify(media));
+  },
+
+  addMedia: (item: Omit<Media, 'id' | 'playCount' | 'downloadCount' | 'createdAt'>) => {
+    const current = db.getMedia();
+    const newItem: Media = {
+      ...item,
+      id: Math.random().toString(36).substr(2, 9),
+      playCount: 0,
+      downloadCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    db.saveMedia([newItem, ...current]);
+    return newItem;
+  },
+
+  updateMedia: (id: string, updates: Partial<Media>) => {
+    const current = db.getMedia();
+    const updated = current.map(m => m.id === id ? { ...m, ...updates } : m);
+    db.saveMedia(updated);
+  },
+
+  deleteMedia: (id: string) => {
+    const current = db.getMedia();
+    db.saveMedia(current.filter(m => m.id !== id));
+  },
+
+  incrementPlay: (id: string) => {
+    const current = db.getMedia();
+    const updated = current.map(m => m.id === id ? { ...m, playCount: m.playCount + 1 } : m);
+    db.saveMedia(updated);
+  },
+
+  incrementDownload: (id: string) => {
+    const current = db.getMedia();
+    const updated = current.map(m => m.id === id ? { ...m, downloadCount: m.downloadCount + 1 } : m);
+    db.saveMedia(updated);
+  },
+
+  // Admin Methods
+  getAdmins: (): Admin[] => {
+    const data = localStorage.getItem(ADMIN_KEY);
+    if (!data) {
+      localStorage.setItem(ADMIN_KEY, JSON.stringify(DEFAULT_ADMINS));
+      return DEFAULT_ADMINS;
+    }
+    return JSON.parse(data);
+  },
+
+  addAdmin: (email: string, role: AdminRole) => {
+    const admins = db.getAdmins();
+    if (admins.find(a => a.email === email)) return;
+    const newAdmin: Admin = {
+      id: Math.random().toString(36).substr(2, 9),
+      email,
+      role
+    };
+    localStorage.setItem(ADMIN_KEY, JSON.stringify([...admins, newAdmin]));
+  },
+
+  updateAdmin: (id: string, email: string, role: AdminRole) => {
+    const admins = db.getAdmins();
+    const updated = admins.map(a => a.id === id ? { ...a, email, role } : a);
+    localStorage.setItem(ADMIN_KEY, JSON.stringify(updated));
+  },
+
+  removeAdmin: (id: string) => {
+    const admins = db.getAdmins();
+    if (admins.length <= 1) return; // Prevent deleting the last admin
+    localStorage.setItem(ADMIN_KEY, JSON.stringify(admins.filter(a => a.id !== id)));
+  }
+};
