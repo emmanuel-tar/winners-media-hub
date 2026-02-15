@@ -52,6 +52,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const [isUploadingThumb, setIsUploadingThumb] = React.useState(false);
   const [showThumbSuccess, setShowThumbSuccess] = React.useState(false);
 
+  // Notice Image State
+  const [isUploadingNoticeThumb, setIsUploadingNoticeThumb] = React.useState(false);
+
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editingAdminId, setEditingAdminId] = React.useState<string | null>(null);
   const [errors, setErrors] = React.useState<FormErrors>({});
@@ -65,7 +68,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     message: '',
     date: new Date().toISOString().split('T')[0],
     priority: 'Normal' as 'High' | 'Normal',
-    active: true
+    active: true,
+    imageUrl: ''
   });
 
   // Role Permissions
@@ -118,8 +122,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
         message: '',
         date: new Date().toISOString().split('T')[0],
         priority: 'Normal',
-        active: true
+        active: true,
+        imageUrl: ''
     });
+    setIsUploadingNoticeThumb(false);
   };
 
   const validate = (): boolean => {
@@ -308,13 +314,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
       setIsUploadingThumb(true);
       setShowThumbSuccess(false);
       
-      setTimeout(() => {
-        const objectUrl = URL.createObjectURL(file);
-        setFormData(prev => ({ ...prev, thumbnailUrl: objectUrl }));
-        setIsUploadingThumb(false);
-        setShowThumbSuccess(true);
-      }, 1200);
+      // Use FileReader to store actual Base64 data for persistence
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // Simulate network delay for better UX
+        setTimeout(() => {
+            const base64String = reader.result as string;
+            setFormData(prev => ({ ...prev, thumbnailUrl: base64String }));
+            setIsUploadingThumb(false);
+            setShowThumbSuccess(true);
+        }, 1200);
+      };
+      reader.readAsDataURL(file);
     }
+  };
+
+  const handleNoticeImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     const file = e.target.files?.[0];
+     if (file) {
+       if (file.size > MAX_IMAGE_SIZE) {
+         alert("Image exceeds 5MB limit.");
+         return;
+       }
+       setIsUploadingNoticeThumb(true);
+       const reader = new FileReader();
+       reader.onloadend = () => {
+         setTimeout(() => {
+            const base64String = reader.result as string;
+            setNoticeForm(prev => ({ ...prev, imageUrl: base64String }));
+            setIsUploadingNoticeThumb(false);
+         }, 800);
+       };
+       reader.readAsDataURL(file);
+     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -901,7 +933,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                 <X className="h-6 w-6" />
               </button>
             </div>
-            <form onSubmit={handleNoticeSubmit} className="p-8 space-y-6">
+            <form onSubmit={handleNoticeSubmit} className="p-8 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase ml-1">Title</label>
                 <input
@@ -948,12 +980,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                 </div>
               </div>
 
+               <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Announcement Image (Optional)</label>
+                <div className={`relative border-2 border-dashed rounded-xl overflow-hidden transition-all ${noticeForm.imageUrl ? 'border-none' : 'border-slate-200 hover:border-amber-400 bg-slate-50'}`}>
+                   {isUploadingNoticeThumb ? (
+                      <div className="h-32 flex flex-col items-center justify-center bg-slate-50">
+                          <Loader2 className="h-6 w-6 text-amber-600 animate-spin mb-2" />
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Processing Image...</span>
+                      </div>
+                   ) : noticeForm.imageUrl ? (
+                      <div className="relative group h-32 w-full">
+                         <img src={noticeForm.imageUrl} className="w-full h-full object-cover rounded-xl" alt="Preview" />
+                         <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center rounded-xl backdrop-blur-sm">
+                            <label className="cursor-pointer">
+                                <div className="bg-white/20 text-white px-3 py-1.5 rounded-lg backdrop-blur-md flex items-center space-x-2 border border-white/30 hover:bg-white/30 transition-all">
+                                   <ImagePlus className="h-4 w-4" />
+                                   <span className="text-[10px] font-bold uppercase tracking-wide">Change</span>
+                                </div>
+                                <input type="file" accept="image/*" className="hidden" onChange={handleNoticeImageChange} />
+                            </label>
+                         </div>
+                      </div>
+                   ) : (
+                      <label className="flex flex-col items-center justify-center cursor-pointer py-6 group">
+                         <ImagePlus className="h-8 w-8 text-slate-300 group-hover:text-amber-600 transition-colors mb-2" />
+                         <span className="text-[10px] font-bold text-slate-400 group-hover:text-amber-700 uppercase tracking-widest">Upload Banner</span>
+                         <input type="file" accept="image/*" className="hidden" onChange={handleNoticeImageChange} />
+                      </label>
+                   )}
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  className="flex-grow py-4 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 transition-all shadow-xl shadow-amber-100"
+                  disabled={isUploadingNoticeThumb}
+                  className="flex-grow py-4 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 transition-all shadow-xl shadow-amber-100 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  Post Notice
+                  {isUploadingNoticeThumb ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
+                  <span>Post Notice</span>
                 </button>
               </div>
             </form>

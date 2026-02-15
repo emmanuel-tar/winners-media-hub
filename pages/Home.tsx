@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Play, ArrowRight, Music, Heart, Mic2, Bell, CalendarClock, AlertCircle } from 'lucide-react';
+import { Play, ArrowRight, Music, Heart, Mic2, Bell, CalendarClock, AlertCircle, CalendarPlus, Download } from 'lucide-react';
 import { db } from '../services/db';
 import { Media, Notice } from '../types';
 
@@ -17,6 +17,47 @@ const Home: React.FC<HomeProps> = ({ onPlay }) => {
     setRecentMedia(db.getMedia().slice(0, 3));
     setNotices(db.getNotices().filter(n => n.active).slice(0, 4));
   }, []);
+
+  const addToGoogleCalendar = (notice: Notice) => {
+    const startDate = new Date(notice.date).toISOString().replace(/-|:|\.\d\d\d/g, "");
+    const endDate = new Date(new Date(notice.date).getTime() + 24 * 60 * 60 * 1000).toISOString().replace(/-|:|\.\d\d\d/g, "");
+    
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(notice.title)}&dates=${startDate}/${endDate}&details=${encodeURIComponent(notice.message)}`;
+    window.open(url, '_blank');
+  };
+
+  const addToOutlookCalendar = (notice: Notice) => {
+    const startDate = new Date(notice.date).toISOString().split('T')[0];
+    const endDate = new Date(new Date(notice.date).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    
+    const url = `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&startdt=${startDate}&enddt=${endDate}&subject=${encodeURIComponent(notice.title)}&body=${encodeURIComponent(notice.message)}`;
+    window.open(url, '_blank');
+  };
+
+  const downloadICS = (notice: Notice) => {
+    const startDate = new Date(notice.date).toISOString().replace(/-|:|\.\d\d\d/g, "");
+    const endDate = new Date(new Date(notice.date).getTime() + 24 * 60 * 60 * 1000).toISOString().replace(/-|:|\.\d\d\d/g, "");
+    
+    const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+URL:${window.location.href}
+DTSTART:${startDate}
+DTEND:${endDate}
+SUMMARY:${notice.title}
+DESCRIPTION:${notice.message}
+LOCATION:Living Faith Church, Agric Ikorodu
+END:VEVENT
+END:VCALENDAR`;
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `${notice.title}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="space-y-16 py-8">
@@ -69,23 +110,58 @@ const Home: React.FC<HomeProps> = ({ onPlay }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {notices.map((notice) => (
-                <div key={notice.id} className={`bg-white p-5 rounded-2xl border ${notice.priority === 'High' ? 'border-l-4 border-l-red-500 border-t-slate-100 border-r-slate-100 border-b-slate-100' : 'border-slate-100'} shadow-sm hover:shadow-md transition-shadow`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                      <CalendarClock className="h-3.5 w-3.5" />
-                      <span>{new Date(notice.date).toLocaleDateString()}</span>
+                <div key={notice.id} className={`bg-white rounded-2xl border ${notice.priority === 'High' ? 'border-l-4 border-l-red-500 border-t-slate-100 border-r-slate-100 border-b-slate-100' : 'border-slate-100'} shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col`}>
+                  {notice.imageUrl && (
+                    <div className="h-40 w-full overflow-hidden">
+                      <img src={notice.imageUrl} alt={notice.title} className="w-full h-full object-cover" />
                     </div>
-                    {notice.priority === 'High' && (
-                      <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide flex items-center">
-                        <AlertCircle className="h-3 w-3 mr-1" />
-                        Important
-                      </span>
-                    )}
+                  )}
+                  <div className="p-5 flex-grow">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        <span>{new Date(notice.date).toLocaleDateString()}</span>
+                      </div>
+                      {notice.priority === 'High' && (
+                        <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide flex items-center">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          Important
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-2 font-serif">{notice.title}</h3>
+                    <p className="text-sm text-slate-600 leading-relaxed mb-4">{notice.message}</p>
+                    
+                    {/* Add to Calendar Actions */}
+                    <div className="pt-4 border-t border-slate-50 mt-auto">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Add to Calendar</p>
+                      <div className="flex flex-wrap gap-2">
+                         <button 
+                           onClick={() => addToGoogleCalendar(notice)}
+                           className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 rounded-lg text-[10px] font-bold text-slate-600 transition-all"
+                         >
+                           <CalendarPlus className="h-3.5 w-3.5" />
+                           <span>Google</span>
+                         </button>
+                         <button 
+                           onClick={() => addToOutlookCalendar(notice)}
+                           className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-800 rounded-lg text-[10px] font-bold text-slate-600 transition-all"
+                         >
+                           <CalendarPlus className="h-3.5 w-3.5" />
+                           <span>Outlook</span>
+                         </button>
+                         <button 
+                           onClick={() => downloadICS(notice)}
+                           className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-400 hover:text-slate-800 rounded-lg text-[10px] font-bold text-slate-600 transition-all"
+                         >
+                           <Download className="h-3.5 w-3.5" />
+                           <span>Save File</span>
+                         </button>
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2 font-serif">{notice.title}</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">{notice.message}</p>
                 </div>
               ))}
             </div>

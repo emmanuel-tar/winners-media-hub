@@ -40,6 +40,7 @@ export interface Notice {
   message: string;
   date: string;
   priority: 'High' | 'Normal';
+  imageUrl?: string;
   active: boolean;
 }
 

@@ -47,7 +47,8 @@ const DEFAULT_NOTICES: Notice[] = [
     message: 'Join us this Wednesday for a special communion service as we partake in the table of the Lord. Time: 6:00 PM.',
     date: new Date().toISOString(),
     priority: 'High',
-    active: true
+    active: true,
+    imageUrl: 'https://picsum.photos/seed/communion/800/400'
   },
   {
     id: 'n2',
@@ -55,7 +56,8 @@ const DEFAULT_NOTICES: Notice[] = [
     message: 'Calling all youths! The annual Youth Aflame Summit is here. Theme: "Dominion". Don\'t miss out!',
     date: new Date().toISOString(),
     priority: 'Normal',
-    active: true
+    active: true,
+    imageUrl: 'https://picsum.photos/seed/youth/800/400'
   }
 ];
 
