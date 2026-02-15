@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Plus, Trash2, Edit3, BarChart3, Upload, Loader2, Sparkles, CheckCircle, X, ImagePlus, FileImage, Play, Headphones, CloudUpload, User, Calendar, Download, Users, ShieldCheck, Mail, AlertCircle, Save, ShieldAlert, Eye, Lock } from 'lucide-react';
+import { Plus, Trash2, Edit3, BarChart3, Upload, Loader2, Sparkles, CheckCircle, X, ImagePlus, FileImage, Play, Headphones, CloudUpload, User, Calendar, Download, Users, ShieldCheck, Mail, AlertCircle, Save, ShieldAlert, Eye, Lock, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/gemini';
 import { Media, Category, Admin, AdminRole } from '../types';
@@ -20,6 +20,9 @@ interface FormErrors {
   thumbnailUrl?: string;
 }
 
+type SortField = 'date' | 'title' | 'preacher' | 'plays' | 'downloads';
+type SortOrder = 'asc' | 'desc';
+
 const MAX_AUDIO_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -30,6 +33,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = React.useState(false);
   const [isGenerating, setIsGenerating] = React.useState(false);
+  
+  // Sorting State
+  const [sortField, setSortField] = React.useState<SortField>('date');
+  const [sortOrder, setSortOrder] = React.useState<SortOrder>('desc');
+  const [searchQuery, setSearchQuery] = React.useState('');
   
   // Audio Upload States
   const [isUploadingFile, setIsUploadingFile] = React.useState(false);
@@ -99,6 +107,66 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  // Sorting Logic
+  const handleHeaderClick = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      // Default sort directions:
+      // Text/Date -> Asc (A-Z, Oldest) usually, but for Date 'desc' (Newest) is better default.
+      // Numbers -> Desc (Highest)
+      if (field === 'date' || field === 'plays' || field === 'downloads') {
+        setSortOrder('desc');
+      } else {
+        setSortOrder('asc');
+      }
+    }
+  };
+
+  const sortedMediaList = React.useMemo(() => {
+    let processed = [...mediaList];
+    
+    // Filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      processed = processed.filter(m => 
+        m.title.toLowerCase().includes(q) || 
+        m.preacher.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    return processed.sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'title':
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case 'preacher':
+          comparison = a.preacher.localeCompare(b.preacher);
+          break;
+        case 'date':
+          comparison = new Date(a.datePreached).getTime() - new Date(b.datePreached).getTime();
+          break;
+        case 'plays':
+          comparison = a.playCount - b.playCount;
+          break;
+        case 'downloads':
+          comparison = a.downloadCount - b.downloadCount;
+          break;
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [mediaList, sortField, sortOrder, searchQuery]);
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 text-slate-300 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity" />;
+    return sortOrder === 'asc' 
+      ? <ArrowUp className="h-3 w-3 text-red-600 ml-1.5" />
+      : <ArrowDown className="h-3 w-3 text-red-600 ml-1.5" />;
   };
 
   const handleDelete = (id: string) => {
@@ -370,95 +438,175 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-slate-100 bg-red-50/30">
-              <h2 className="font-bold text-red-900 uppercase tracking-widest text-sm">Media Content Database</h2>
+            <div className="px-6 py-4 border-b border-slate-100 bg-red-50/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h2 className="font-bold text-red-900 uppercase tracking-widest text-sm py-2">Media Content Database</h2>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search by title or preacher..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-red-700 outline-none w-full sm:w-64"
+                  />
+                </div>
+
+                {/* Sort Dropdown */}
+                <div className="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide whitespace-nowrap pl-1">Sort By:</span>
+                  <select 
+                    value={`${sortField}-${sortOrder}`} 
+                    onChange={(e) => {
+                      const [field, order] = e.target.value.split('-');
+                      setSortField(field as SortField);
+                      setSortOrder(order as SortOrder);
+                    }}
+                    className="bg-transparent text-slate-700 text-xs font-bold py-2 outline-none cursor-pointer"
+                  >
+                    <option value="date-desc">Newest First</option>
+                    <option value="date-asc">Oldest First</option>
+                    <option value="title-asc">Title (A-Z)</option>
+                    <option value="title-desc">Title (Z-A)</option>
+                    <option value="preacher-asc">Preacher (A-Z)</option>
+                    <option value="plays-desc">Most Played</option>
+                    <option value="downloads-desc">Most Downloaded</option>
+                  </select>
+                </div>
+              </div>
             </div>
+            
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 bg-slate-50/50">
-                    <th className="px-6 py-5">Message Details</th>
-                    <th className="px-6 py-5">Preacher</th>
-                    <th className="px-6 py-5">Date</th>
-                    <th className="px-6 py-5">Engagement</th>
+                    <th 
+                      onClick={() => handleHeaderClick('title')}
+                      className="px-6 py-5 cursor-pointer hover:bg-slate-100/50 hover:text-red-700 transition-colors group"
+                    >
+                      <div className="flex items-center">
+                        Message Details
+                        <SortIcon field="title" />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleHeaderClick('preacher')}
+                      className="px-6 py-5 cursor-pointer hover:bg-slate-100/50 hover:text-red-700 transition-colors group"
+                    >
+                      <div className="flex items-center">
+                        Preacher
+                        <SortIcon field="preacher" />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleHeaderClick('date')}
+                      className="px-6 py-5 cursor-pointer hover:bg-slate-100/50 hover:text-red-700 transition-colors group"
+                    >
+                      <div className="flex items-center">
+                        Date
+                        <SortIcon field="date" />
+                      </div>
+                    </th>
+                    <th 
+                      onClick={() => handleHeaderClick('plays')}
+                      className="px-6 py-5 cursor-pointer hover:bg-slate-100/50 hover:text-red-700 transition-colors group"
+                    >
+                      <div className="flex items-center">
+                        Engagement
+                        <SortIcon field="plays" />
+                      </div>
+                    </th>
                     <th className="px-6 py-5 text-right">Modification Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100/50">
-                  {mediaList.map((media) => (
-                    <tr 
-                      key={media.id} 
-                      className="transition-all group even:bg-slate-50/40 hover:bg-red-50/40"
-                    >
-                      <td className="px-6 py-5">
-                        <div className="flex items-center space-x-4">
-                          <div className="relative w-14 h-14 flex-shrink-0 group-hover:scale-105 transition-transform duration-300">
-                            <img src={media.thumbnailUrl} className="w-full h-full object-cover rounded-xl shadow-sm border border-slate-100" alt="" />
-                            <button 
-                              onClick={() => onPlay?.(media)}
-                              className="absolute inset-0 bg-red-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-all duration-300"
-                            >
-                              <Play className="h-5 w-5 text-white fill-current transform scale-90 group-hover:scale-100" />
-                            </button>
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold text-slate-900 line-clamp-1 font-serif group-hover:text-red-700 transition-colors">{media.title}</div>
-                            <div className="text-[10px] font-extrabold text-red-600/80 uppercase tracking-[0.15em] mt-0.5">{media.category}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center text-sm font-bold text-slate-700">
-                          <User className="h-4 w-4 mr-2.5 text-red-700/40 group-hover:text-red-700/60" />
-                          {media.preacher}
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center text-sm text-slate-500 font-medium">
-                          <Calendar className="h-4 w-4 mr-2.5 text-red-700/40 group-hover:text-red-700/60" />
-                          {new Date(media.datePreached).toLocaleDateString()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex flex-col space-y-1.5">
-                          <div className="flex items-center text-[10px] font-bold text-slate-400 group-hover:text-slate-600 transition-colors">
-                            <Headphones className="h-3.5 w-3.5 mr-2 text-red-700/30 group-hover:text-red-700" />
-                            {media.playCount.toLocaleString()} <span className="ml-1 opacity-50">PLAYS</span>
-                          </div>
-                          <div className="flex items-center text-[10px] font-bold text-slate-400 group-hover:text-slate-600 transition-colors">
-                            <Download className="h-3.5 w-3.5 mr-2 text-amber-600/30 group-hover:text-amber-600" />
-                            {media.downloadCount.toLocaleString()} <span className="ml-1 opacity-50">DLS</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 text-right">
-                        {canEditMedia ? (
-                          <div className="flex items-center justify-end space-x-2">
-                            <button 
-                              onClick={() => handleEdit(media)}
-                              className="flex items-center space-x-1.5 px-3 py-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-50 hover:text-red-700 transition-all shadow-sm"
-                            >
-                              <Edit3 className="h-3.5 w-3.5" />
-                              <span>Modify</span>
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(media.id)}
-                              className="flex items-center space-x-1.5 px-3 py-1.5 text-white bg-red-700/80 rounded-lg text-xs font-bold hover:bg-red-800 transition-all shadow-sm"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end">
-                            <div className="p-2 bg-slate-50 rounded-lg text-slate-300">
-                              <Lock className="h-4 w-4" />
+                  {sortedMediaList.length > 0 ? (
+                    sortedMediaList.map((media) => (
+                      <tr 
+                        key={media.id} 
+                        className="transition-all group even:bg-slate-50/40 hover:bg-red-50/40"
+                      >
+                        <td className="px-6 py-5">
+                          <div className="flex items-center space-x-4">
+                            <div className="relative w-14 h-14 flex-shrink-0 group-hover:scale-105 transition-transform duration-300">
+                              <img src={media.thumbnailUrl} className="w-full h-full object-cover rounded-xl shadow-sm border border-slate-100" alt="" />
+                              <button 
+                                onClick={() => onPlay?.(media)}
+                                className="absolute inset-0 bg-red-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition-all duration-300"
+                              >
+                                <Play className="h-5 w-5 text-white fill-current transform scale-90 group-hover:scale-100" />
+                              </button>
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900 line-clamp-1 font-serif group-hover:text-red-700 transition-colors">{media.title}</div>
+                              <div className="text-[10px] font-extrabold text-red-600/80 uppercase tracking-[0.15em] mt-0.5">{media.category}</div>
                             </div>
                           </div>
-                        )}
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center text-sm font-bold text-slate-700">
+                            <User className="h-4 w-4 mr-2.5 text-red-700/40 group-hover:text-red-700/60" />
+                            {media.preacher}
+                          </div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center text-sm text-slate-500 font-medium">
+                            <Calendar className="h-4 w-4 mr-2.5 text-red-700/40 group-hover:text-red-700/60" />
+                            {new Date(media.datePreached).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex flex-col space-y-1.5">
+                            <div className={`flex items-center text-[10px] font-bold transition-colors ${sortField === 'plays' ? 'text-red-700' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                              <Headphones className={`h-3.5 w-3.5 mr-2 ${sortField === 'plays' ? 'text-red-700' : 'text-red-700/30 group-hover:text-red-700'}`} />
+                              {media.playCount.toLocaleString()} <span className="ml-1 opacity-50">PLAYS</span>
+                            </div>
+                            <div className={`flex items-center text-[10px] font-bold transition-colors ${sortField === 'downloads' ? 'text-amber-700' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                              <Download className={`h-3.5 w-3.5 mr-2 ${sortField === 'downloads' ? 'text-amber-700' : 'text-amber-600/30 group-hover:text-amber-600'}`} />
+                              {media.downloadCount.toLocaleString()} <span className="ml-1 opacity-50">DLS</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                          {canEditMedia ? (
+                            <div className="flex items-center justify-end space-x-2">
+                              <button 
+                                onClick={() => handleEdit(media)}
+                                className="flex items-center space-x-1.5 px-3 py-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-50 hover:text-red-700 transition-all shadow-sm"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                                <span>Modify</span>
+                              </button>
+                              <button 
+                                onClick={() => handleDelete(media.id)}
+                                className="flex items-center space-x-1.5 px-3 py-1.5 text-white bg-red-700/80 rounded-lg text-xs font-bold hover:bg-red-800 transition-all shadow-sm"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end">
+                              <div className="p-2 bg-slate-50 rounded-lg text-slate-300">
+                                <Lock className="h-4 w-4" />
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">
+                        <div className="flex flex-col items-center space-y-2">
+                          <Search className="h-8 w-8 text-slate-200" />
+                          <p>No messages found matching your criteria.</p>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
