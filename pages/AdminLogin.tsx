@@ -20,12 +20,14 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin }) => {
     const admins = db.getAdmins();
     const adminUser = admins.find(a => a.email.toLowerCase() === email.toLowerCase());
 
-    if (adminUser && password.length >= 6) {
-      onLogin(adminUser);
-    } else if (!adminUser) {
-      setError('Access Denied. This email is not authorized.');
+    if (adminUser) {
+      if (adminUser.password === password) {
+        onLogin(adminUser);
+      } else {
+        setError('Incorrect password. Please try again.');
+      }
     } else {
-      setError('Invalid password. Minimum 6 characters required.');
+      setError('Access Denied. This email is not authorized.');
     }
   };
 

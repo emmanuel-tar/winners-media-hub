@@ -31,6 +31,7 @@ export interface Media {
 export interface Admin {
   id: string;
   email: string;
+  password?: string;
   role: AdminRole;
 }
 

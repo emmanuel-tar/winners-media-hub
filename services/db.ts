@@ -37,7 +37,7 @@ const DEFAULT_MEDIA: Media[] = [
 ];
 
 const DEFAULT_ADMINS: Admin[] = [
-  { id: 'admin-1', email: 'admin@church.com', role: AdminRole.FULL_ACCESS }
+  { id: 'admin-1', email: 'admin@church.com', password: 'password123', role: AdminRole.FULL_ACCESS }
 ];
 
 const DEFAULT_NOTICES: Notice[] = [
@@ -119,23 +119,39 @@ export const db = {
       localStorage.setItem(ADMIN_KEY, JSON.stringify(DEFAULT_ADMINS));
       return DEFAULT_ADMINS;
     }
-    return JSON.parse(data);
+    const admins = JSON.parse(data);
+    // Migration: ensure all admins have a password field if missing from old data
+    return admins.map((a: Admin) => ({
+      ...a,
+      password: a.password || 'password123'
+    }));
   },
 
-  addAdmin: (email: string, role: AdminRole) => {
+  addAdmin: (email: string, role: AdminRole, password?: string) => {
     const admins = db.getAdmins();
     if (admins.find(a => a.email === email)) return;
     const newAdmin: Admin = {
       id: Math.random().toString(36).substr(2, 9),
       email,
-      role
+      role,
+      password: password || 'password123'
     };
     localStorage.setItem(ADMIN_KEY, JSON.stringify([...admins, newAdmin]));
   },
 
-  updateAdmin: (id: string, email: string, role: AdminRole) => {
+  updateAdmin: (id: string, email: string, role: AdminRole, password?: string) => {
     const admins = db.getAdmins();
-    const updated = admins.map(a => a.id === id ? { ...a, email, role } : a);
+    const updated = admins.map(a => {
+      if (a.id === id) {
+        return {
+          ...a,
+          email,
+          role,
+          password: (password && password.trim()) ? password : a.password
+        };
+      }
+      return a;
+    });
     localStorage.setItem(ADMIN_KEY, JSON.stringify(updated));
   },
 

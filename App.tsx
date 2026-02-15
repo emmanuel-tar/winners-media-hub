@@ -79,7 +79,10 @@ const App: React.FC = () => {
               <div className="flex flex-col items-center">
                 <div className="h-px w-20 bg-slate-100 mb-4"></div>
                 <p className="text-red-700/60 text-[10px] sm:text-[11px] uppercase tracking-[0.4em] font-black">
-                  designed by CodedFingers
+                  designed by T SQUARE HUB
+                </p>
+                <p className="text-red-700/50 text-[10px] font-bold mt-1 tracking-widest">
+                  08079126123
                 </p>
               </div>
             </div>

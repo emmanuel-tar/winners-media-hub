@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Plus, Trash2, Edit3, BarChart3, Upload, Loader2, Sparkles, CheckCircle, X, ImagePlus, FileImage, Play, Headphones, CloudUpload, User, Calendar, Download, Users, ShieldCheck, Mail, AlertCircle, Save, ShieldAlert, Eye, Lock, ArrowUp, ArrowDown, ArrowUpDown, Search, Bell, Megaphone } from 'lucide-react';
+import { Plus, Trash2, Edit3, BarChart3, Upload, Loader2, Sparkles, CheckCircle, X, ImagePlus, FileImage, Play, Headphones, CloudUpload, User, Calendar, Download, Users, ShieldCheck, Mail, AlertCircle, Save, ShieldAlert, Eye, Lock, ArrowUp, ArrowDown, ArrowUpDown, Search, Bell, Megaphone, KeyRound } from 'lucide-react';
 import { db } from '../services/db';
 import { geminiService } from '../services/gemini';
 import { Media, Category, Admin, AdminRole, Notice } from '../types';
@@ -60,6 +60,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const [errors, setErrors] = React.useState<FormErrors>({});
   
   const [adminEmailForm, setAdminEmailForm] = React.useState('');
+  const [adminPasswordForm, setAdminPasswordForm] = React.useState('');
   const [adminRoleForm, setAdminRoleForm] = React.useState<AdminRole>(AdminRole.EDITOR);
 
   // Notice Form State
@@ -112,6 +113,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setIsAdminModalOpen(false);
     setEditingAdminId(null);
     setAdminEmailForm('');
+    setAdminPasswordForm('');
     setAdminRoleForm(AdminRole.EDITOR);
   };
 
@@ -241,10 +243,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     e.preventDefault();
     if (!adminEmailForm) return;
 
+    if (!editingAdminId && !adminPasswordForm) {
+      alert("A password is required when creating a new admin.");
+      return;
+    }
+
     if (editingAdminId) {
-      db.updateAdmin(editingAdminId, adminEmailForm, adminRoleForm);
+      db.updateAdmin(editingAdminId, adminEmailForm, adminRoleForm, adminPasswordForm);
     } else {
-      db.addAdmin(adminEmailForm, adminRoleForm);
+      db.addAdmin(adminEmailForm, adminRoleForm, adminPasswordForm);
     }
     
     setAdminList(db.getAdmins());
@@ -255,6 +262,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setEditingAdminId(admin.id);
     setAdminEmailForm(admin.email);
     setAdminRoleForm(admin.role);
+    setAdminPasswordForm(''); // Don't show existing password
     setIsAdminModalOpen(true);
   };
 
@@ -459,7 +467,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
           )}
           {activeTab === 'users' && canManageAdmins && (
             <button
-              onClick={() => { setEditingAdminId(null); setAdminEmailForm(''); setAdminRoleForm(AdminRole.EDITOR); setIsAdminModalOpen(true); }}
+              onClick={() => { setEditingAdminId(null); setAdminEmailForm(''); setAdminPasswordForm(''); setAdminRoleForm(AdminRole.EDITOR); setIsAdminModalOpen(true); }}
               className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all shadow-sm"
             >
               <Users className="h-4 w-4 text-red-700" />
@@ -769,72 +777,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
         </div>
       )}
 
-       {activeTab === 'notices' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm max-w-4xl">
-          <div className="px-6 py-4 border-b border-slate-100 bg-amber-50/30 flex items-center justify-between">
-            <h2 className="font-bold text-amber-900 uppercase tracking-widest text-sm">Notice Board Database</h2>
-            <span className="text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1 rounded-full">{noticeList.length} Active</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 bg-slate-50/50">
-                  <th className="px-6 py-5">Announcement Title</th>
-                  <th className="px-6 py-5">Date</th>
-                  <th className="px-6 py-5">Priority</th>
-                  <th className="px-6 py-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100/50">
-                {noticeList.map((notice) => (
-                  <tr 
-                    key={notice.id} 
-                    className="transition-all even:bg-slate-50/40 hover:bg-amber-50/40"
-                  >
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-slate-900">{notice.title}</span>
-                        <span className="text-xs text-slate-500 line-clamp-1">{notice.message}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                       <span className="text-xs font-bold text-slate-600">{new Date(notice.date).toLocaleDateString()}</span>
-                    </td>
-                    <td className="px-6 py-5">
-                      {notice.priority === 'High' ? (
-                        <span className="bg-red-100 text-red-700 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wide">High</span>
-                      ) : (
-                        <span className="bg-slate-100 text-slate-600 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wide">Normal</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      {canManageNotices ? (
-                        <button 
-                          onClick={() => handleDeleteNotice(notice.id)}
-                          className="flex items-center space-x-1.5 px-3 py-1.5 text-red-600 bg-white border border-red-100 rounded-lg text-xs font-bold hover:bg-red-50 transition-all shadow-sm ml-auto"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>Delete</span>
-                        </button>
-                      ) : (
-                        <Lock className="h-4 w-4 text-slate-300 ml-auto" />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {noticeList.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
-                      No active announcements
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Admin Modification Modal with Access Control */}
       {isAdminModalOpen && canManageAdmins && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -859,6 +801,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                     value={adminEmailForm}
                     onChange={(e) => setAdminEmailForm(e.target.value)}
                     placeholder="name@winnerschurch.com"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-700 outline-none transition-all text-slate-900 font-bold placeholder-slate-400"
+                  />
+                </div>
+              </div>
+
+               <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase ml-1">
+                   {editingAdminId ? 'New Password (Optional)' : 'Set Password'}
+                </label>
+                <div className="relative">
+                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                   <input
+                    type="text"
+                    required={!editingAdminId}
+                    value={adminPasswordForm}
+                    onChange={(e) => setAdminPasswordForm(e.target.value)}
+                    placeholder={editingAdminId ? "Leave blank to keep current" : "Create a strong password"}
                     className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-700 outline-none transition-all text-slate-900 font-bold placeholder-slate-400"
                   />
                 </div>
