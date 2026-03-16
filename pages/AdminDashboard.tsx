@@ -18,6 +18,7 @@ interface FormErrors {
   description?: string;
   fileUrl?: string;
   thumbnailUrl?: string;
+  noticeImage?: string;
 }
 
 type SortField = 'date' | 'title' | 'preacher' | 'plays' | 'downloads';
@@ -64,11 +65,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const [adminRoleForm, setAdminRoleForm] = React.useState<AdminRole>(AdminRole.EDITOR);
 
   // Notice Form State
-  const [noticeForm, setNoticeForm] = React.useState({
+  const [noticeForm, setNoticeForm] = React.useState<{
+    id?: string;
+    title: string;
+    message: string;
+    date: string;
+    priority: 'High' | 'Normal';
+    active: boolean;
+    imageUrl?: string;
+  }>({
     title: '',
     message: '',
     date: new Date().toISOString().split('T')[0],
-    priority: 'Normal' as 'High' | 'Normal',
+    priority: 'Normal',
     active: true,
     imageUrl: ''
   });
@@ -128,6 +137,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
         imageUrl: ''
     });
     setIsUploadingNoticeThumb(false);
+    setErrors({});
   };
 
   const validate = (): boolean => {
@@ -204,6 +214,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleDelete = (id: string) => {
+    if (!canEditMedia) return;
     if (confirm('Are you sure you want to permanently delete this media from the library?')) {
       db.deleteMedia(id);
       setMediaList(db.getMedia());
@@ -211,6 +222,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleEdit = (media: Media) => {
+    if (!canEditMedia) return;
     setEditingId(media.id);
     setFormData({
       title: media.title,
@@ -230,6 +242,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleAddNew = () => {
+    if (!canEditMedia) return;
     setEditingId(null);
     setFormData(initialFormState);
     setUploadProgress(0);
@@ -241,6 +254,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
 
   const handleAdminSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageAdmins) return;
     if (!adminEmailForm) return;
 
     if (!editingAdminId && !adminPasswordForm) {
@@ -259,6 +273,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleEditAdmin = (admin: Admin) => {
+    if (!canManageAdmins) return;
     setEditingAdminId(admin.id);
     setAdminEmailForm(admin.email);
     setAdminRoleForm(admin.role);
@@ -267,6 +282,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleRemoveAdmin = (id: string) => {
+    if (!canManageAdmins) return;
     if (confirm('Are you sure you want to revoke this user\'s admin privileges?')) {
       db.removeAdmin(id);
       setAdminList(db.getAdmins());
@@ -275,14 +291,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
 
   const handleNoticeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageNotices) return;
     if (!noticeForm.title || !noticeForm.message) return;
     
-    db.addNotice(noticeForm);
+    if (noticeForm.id) {
+      db.updateNotice(noticeForm.id, noticeForm);
+    } else {
+      db.addNotice(noticeForm);
+    }
     setNoticeList(db.getNotices());
     closeNoticeModal();
   };
 
   const handleDeleteNotice = (id: string) => {
+    if (!canManageNotices) return;
     if (confirm('Delete this announcement?')) {
       db.deleteNotice(id);
       setNoticeList(db.getNotices());
@@ -290,6 +312,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleGenerateAI = async () => {
+    if (!canEditMedia) return;
     if (!formData.description) {
       setErrors(prev => ({ ...prev, description: "Enter a description first so AI can analyze it" }));
       return;
@@ -307,6 +330,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEditMedia) return;
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
@@ -338,10 +362,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleNoticeImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     if (!canManageNotices) return;
      const file = e.target.files?.[0];
      if (file) {
+       setErrors(prev => ({ ...prev, noticeImage: undefined }));
+       
+       const isImage = file.type.startsWith('image/');
+       if (!isImage) {
+         setErrors(prev => ({ ...prev, noticeImage: 'Please select a valid image file (JPG, PNG, etc).' }));
+         return;
+       }
+
        if (file.size > MAX_IMAGE_SIZE) {
-         alert("Image exceeds 5MB limit.");
+         setErrors(prev => ({ ...prev, noticeImage: 'Image exceeds the 5MB size limit.' }));
          return;
        }
        setIsUploadingNoticeThumb(true);
@@ -358,6 +391,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEditMedia) return;
     const file = e.target.files?.[0];
     if (file) {
       setErrors(prev => ({ ...prev, fileUrl: undefined }));
@@ -403,6 +437,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEditMedia) return;
     if (!validate()) return;
 
     if (editingId) {
@@ -504,16 +539,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
         >
           Announcements
         </button>
-        {canManageAdmins && (
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'users' ? 'bg-white text-red-700 shadow-md' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Team Management
-          </button>
-        )}
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'users' ? 'bg-white text-red-700 shadow-md' : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Team Management
+        </button>
       </div>
 
       {activeTab === 'library' && (
@@ -711,6 +744,114 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
             </div>
           </div>
         </>
+      )}
+
+      {activeTab === 'notices' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm max-w-5xl">
+          <div className="px-6 py-4 border-b border-slate-100 bg-amber-50/30 flex items-center justify-between">
+            <h2 className="font-bold text-amber-900 uppercase tracking-widest text-sm">Church Announcements</h2>
+            <span className="text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1 rounded-full">{noticeList.length} Total</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-6 py-5">Announcement Details</th>
+                  <th className="px-6 py-5">Date</th>
+                  <th className="px-6 py-5">Priority</th>
+                  <th className="px-6 py-5">Status</th>
+                  <th className="px-6 py-5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100/50">
+                {noticeList.length > 0 ? (
+                  noticeList.map((notice) => (
+                    <tr 
+                      key={notice.id} 
+                      className="transition-all even:bg-slate-50/40 hover:bg-amber-50/40"
+                    >
+                      <td className="px-6 py-5">
+                        <div className="flex items-center space-x-4">
+                          {notice.imageUrl ? (
+                            <img src={notice.imageUrl} alt={notice.title} className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center border border-slate-200">
+                              <Megaphone className="h-5 w-5 text-slate-400" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-bold text-slate-900 text-sm">{notice.title}</p>
+                            <p className="text-xs text-slate-500 line-clamp-1 max-w-xs mt-0.5">{notice.message}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex items-center text-sm font-bold text-slate-700">
+                          <Calendar className="h-4 w-4 mr-2 text-slate-400" />
+                          {new Date(notice.date).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                          notice.priority === 'High' 
+                            ? 'bg-red-100 text-red-700 border border-red-200' 
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}>
+                          {notice.priority}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                          notice.active 
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}>
+                          {notice.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        {canManageNotices ? (
+                          <div className="flex items-center justify-end space-x-2">
+                            <button 
+                              onClick={() => {
+                                setNoticeForm(notice);
+                                setIsNoticeModalOpen(true);
+                              }}
+                              className="flex items-center space-x-1.5 px-3 py-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-50 hover:text-amber-700 transition-all shadow-sm"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                              <span>Edit</span>
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteNotice(notice.id)}
+                              className="flex items-center space-x-1.5 px-3 py-1.5 text-white bg-red-700/80 rounded-lg text-xs font-bold hover:bg-red-800 transition-all shadow-sm"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end">
+                            <Lock className="h-4 w-4 text-slate-300" />
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">
+                      <div className="flex flex-col items-center space-y-2">
+                        <Megaphone className="h-8 w-8 text-slate-200" />
+                        <p>No active announcements found.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {activeTab === 'users' && (
@@ -939,9 +1080,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                 </div>
               </div>
 
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setNoticeForm({...noticeForm, active: !noticeForm.active})}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2 ${
+                    noticeForm.active ? 'bg-amber-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      noticeForm.active ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+                <span className="text-sm font-bold text-slate-700">
+                  {noticeForm.active ? 'Active (Visible to users)' : 'Inactive (Hidden from users)'}
+                </span>
+              </div>
+
                <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase ml-1">Announcement Image (Optional)</label>
-                <div className={`relative border-2 border-dashed rounded-xl overflow-hidden transition-all ${noticeForm.imageUrl ? 'border-none' : 'border-slate-200 hover:border-amber-400 bg-slate-50'}`}>
+                <div className={`relative border-2 border-dashed rounded-xl overflow-hidden transition-all ${noticeForm.imageUrl ? 'border-none' : errors.noticeImage ? 'border-red-400 bg-red-50' : 'border-slate-200 hover:border-amber-400 bg-slate-50'}`}>
                    {isUploadingNoticeThumb ? (
                       <div className="h-32 flex flex-col items-center justify-center bg-slate-50">
                           <Loader2 className="h-6 w-6 text-amber-600 animate-spin mb-2" />
@@ -962,12 +1122,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                       </div>
                    ) : (
                       <label className="flex flex-col items-center justify-center cursor-pointer py-6 group">
-                         <ImagePlus className="h-8 w-8 text-slate-300 group-hover:text-amber-600 transition-colors mb-2" />
-                         <span className="text-[10px] font-bold text-slate-400 group-hover:text-amber-700 uppercase tracking-widest">Upload Banner</span>
+                         <ImagePlus className={`h-8 w-8 ${errors.noticeImage ? 'text-red-400' : 'text-slate-300 group-hover:text-amber-600'} transition-colors mb-2`} />
+                         <span className={`text-[10px] font-bold ${errors.noticeImage ? 'text-red-500' : 'text-slate-400 group-hover:text-amber-700'} uppercase tracking-widest`}>Upload Banner</span>
                          <input type="file" accept="image/*" className="hidden" onChange={handleNoticeImageChange} />
                       </label>
                    )}
                 </div>
+                {errors.noticeImage && (
+                  <div className="flex items-center space-x-1 mt-1.5 text-red-500">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span className="text-xs font-bold">{errors.noticeImage}</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 pt-2">
@@ -1101,17 +1267,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                           </label>
                         </div>
                       ) : isUploadingFile ? (
-                        <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
-                          <div className="flex justify-between items-center mb-2">
-                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center">
-                               <Loader2 className="h-3 w-3 mr-1.5 animate-spin text-red-600" />
-                               Uploading...
-                             </span>
-                             <span className="text-xs font-bold text-red-700">{uploadProgress}%</span>
+                        <div className="relative border-2 border-red-200 rounded-2xl p-6 bg-red-50/30 shadow-md overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent -translate-x-full animate-shimmer" />
+                          <div className="relative z-10">
+                            <div className="flex justify-between items-center mb-3">
+                               <span className="text-xs font-bold text-red-700 uppercase tracking-widest flex items-center">
+                                 <Loader2 className="h-4 w-4 mr-2 animate-spin text-red-600" />
+                                 Uploading Media...
+                               </span>
+                               <span className="text-sm font-black text-red-700">{uploadProgress}%</span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner relative">
+                               <div 
+                                  className="h-full bg-red-600 transition-all duration-300 ease-out rounded-full shadow-[0_0_10px_rgba(220,38,38,0.5)] relative overflow-hidden" 
+                                  style={{ width: `${uploadProgress}%` }} 
+                               >
+                                  <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[length:1rem_1rem] animate-progress-stripe" />
+                               </div>
+                            </div>
+                            <p className="text-[10px] text-red-500/80 font-medium mt-2 text-center">Please do not close this window</p>
                           </div>
-                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                             <div className="h-full bg-red-600 transition-all duration-300 ease-out rounded-full" style={{ width: `${uploadProgress}%` }} />
+                        </div>
+                      ) : showSuccess ? (
+                        <div className="w-full bg-green-50 border-2 border-green-200 rounded-2xl p-5 flex items-center justify-between animate-in fade-in zoom-in duration-300 shadow-sm">
+                          <div className="flex items-center space-x-4 text-green-800">
+                            <div className="bg-green-100 p-2 rounded-full border-2 border-green-200 shadow-sm">
+                              <CheckCircle className="h-6 w-6 text-green-600" />
+                            </div>
+                            <div>
+                               <p className="text-sm font-black uppercase tracking-wide text-green-700">Upload Successful</p>
+                               <p className="text-xs text-green-600/80 font-bold mt-0.5">MP3 file is ready for publishing</p>
+                            </div>
                           </div>
+                          <label className="cursor-pointer px-4 py-2 bg-white border-2 border-green-100 rounded-xl text-[10px] font-bold text-green-700 hover:bg-green-50 hover:border-green-300 uppercase tracking-widest transition-all shadow-sm hover:shadow-md transform hover:-translate-y-0.5">
+                            Change File
+                            <input type="file" accept="audio/mpeg" className="hidden" onChange={handleFileChange} />
+                          </label>
                         </div>
                       ) : (
                         <div className="w-full bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between animate-in fade-in zoom-in duration-300">
@@ -1138,9 +1329,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                       
                        <div className={`relative border-2 border-dashed rounded-2xl transition-all overflow-hidden ${formData.thumbnailUrl ? 'border-none' : 'border-slate-200 hover:border-red-200 bg-slate-50'}`}>
                          {isUploadingThumb ? (
-                            <div className="h-32 flex flex-col items-center justify-center bg-slate-50">
-                               <Loader2 className="h-8 w-8 text-red-600 animate-spin mb-2" />
-                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Optimizing Image...</span>
+                            <div className="h-32 flex flex-col items-center justify-center bg-red-50/30 border-2 border-red-200 rounded-2xl relative overflow-hidden">
+                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent -translate-x-full animate-shimmer" />
+                               <div className="relative z-10 flex flex-col items-center">
+                                 <Loader2 className="h-8 w-8 text-red-600 animate-spin mb-2" />
+                                 <span className="text-[10px] font-bold text-red-700 uppercase tracking-widest">Optimizing Image...</span>
+                               </div>
                             </div>
                          ) : formData.thumbnailUrl ? (
                             <div className="relative group h-32 sm:h-40 w-full animate-in fade-in">
@@ -1183,7 +1377,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                 <button
                   type="submit"
                   disabled={isUploadingFile || isUploadingThumb}
-                  className="flex-grow py-4 bg-red-700 text-white font-bold rounded-2xl hover:bg-red-800 transition-all shadow-xl shadow-red-100 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-grow py-4 bg-red-700 text-white font-bold rounded-2xl hover:bg-red-800 transition-all shadow-xl shadow-red-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isUploadingFile || isUploadingThumb ? (
                     <Loader2 className="h-5 w-5 animate-spin" />

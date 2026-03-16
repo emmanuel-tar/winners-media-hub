@@ -32,6 +32,19 @@
         }
         .winner-red { color: #b91c1c; }
         .bg-winner-red { background-color: #b91c1c; }
+        @keyframes shimmer {
+            100% { transform: translateX(100%); }
+        }
+        .animate-shimmer {
+            animation: shimmer 2s infinite;
+        }
+        @keyframes progress-stripe {
+            0% { background-position: 1rem 0; }
+            100% { background-position: 0 0; }
+        }
+        .animate-progress-stripe {
+            animation: progress-stripe 1s linear infinite;
+        }
     </style>
 <script type="importmap">
 {

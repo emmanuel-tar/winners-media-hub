@@ -181,6 +181,12 @@ export const db = {
     return newNotice;
   },
 
+  updateNotice: (id: string, updates: Partial<Notice>) => {
+    const notices = db.getNotices();
+    const updatedNotices = notices.map(n => n.id === id ? { ...n, ...updates } : n);
+    localStorage.setItem(NOTICE_KEY, JSON.stringify(updatedNotices));
+  },
+
   deleteNotice: (id: string) => {
     const notices = db.getNotices();
     localStorage.setItem(NOTICE_KEY, JSON.stringify(notices.filter(n => n.id !== id)));
