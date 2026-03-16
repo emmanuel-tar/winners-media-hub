@@ -37,7 +37,7 @@ const DEFAULT_MEDIA: Media[] = [
 ];
 
 const DEFAULT_ADMINS: Admin[] = [
-  { id: 'admin-1', email: 'admin@church.com', password: 'password123', role: AdminRole.FULL_ACCESS }
+  { id: 'admin-1', email: 'admin@church.com', password: 'password123', role: AdminRole.ADMIN }
 ];
 
 const DEFAULT_NOTICES: Notice[] = [
@@ -127,27 +127,27 @@ export const db = {
     }));
   },
 
-  addAdmin: (email: string, role: AdminRole, password?: string) => {
+  addAdmin: (adminData: { email: string; role: AdminRole; password?: string }) => {
     const admins = db.getAdmins();
-    if (admins.find(a => a.email === email)) return;
+    if (admins.find(a => a.email === adminData.email)) return;
     const newAdmin: Admin = {
       id: Math.random().toString(36).substr(2, 9),
-      email,
-      role,
-      password: password || 'password123'
+      email: adminData.email,
+      role: adminData.role,
+      password: adminData.password || 'password123'
     };
     localStorage.setItem(ADMIN_KEY, JSON.stringify([...admins, newAdmin]));
   },
 
-  updateAdmin: (id: string, email: string, role: AdminRole, password?: string) => {
+  updateAdmin: (id: string, adminData: { email: string; role: AdminRole; password?: string }) => {
     const admins = db.getAdmins();
     const updated = admins.map(a => {
       if (a.id === id) {
         return {
           ...a,
-          email,
-          role,
-          password: (password && password.trim()) ? password : a.password
+          email: adminData.email,
+          role: adminData.role,
+          password: (adminData.password && adminData.password.trim()) ? adminData.password : a.password
         };
       }
       return a;

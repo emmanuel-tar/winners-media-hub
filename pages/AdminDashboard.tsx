@@ -60,9 +60,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const [editingAdminId, setEditingAdminId] = React.useState<string | null>(null);
   const [errors, setErrors] = React.useState<FormErrors>({});
   
-  const [adminEmailForm, setAdminEmailForm] = React.useState('');
-  const [adminPasswordForm, setAdminPasswordForm] = React.useState('');
-  const [adminRoleForm, setAdminRoleForm] = React.useState<AdminRole>(AdminRole.EDITOR);
+  const [adminFormData, setAdminFormData] = React.useState<{
+    email: string;
+    password?: string;
+    role: AdminRole;
+  }>({
+    email: '',
+    password: '',
+    role: AdminRole.EDITOR
+  });
 
   // Notice Form State
   const [noticeForm, setNoticeForm] = React.useState<{
@@ -83,9 +89,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   });
 
   // Role Permissions
-  const canEditMedia = currentUser.role === AdminRole.FULL_ACCESS || currentUser.role === AdminRole.EDITOR;
-  const canManageAdmins = currentUser.role === AdminRole.FULL_ACCESS;
-  const canManageNotices = currentUser.role === AdminRole.FULL_ACCESS || currentUser.role === AdminRole.EDITOR;
+  const canEditMedia = currentUser.role === AdminRole.ADMIN || currentUser.role === AdminRole.EDITOR;
+  const canManageAdmins = currentUser.role === AdminRole.ADMIN;
+  const canManageNotices = currentUser.role === AdminRole.ADMIN || currentUser.role === AdminRole.EDITOR;
 
   const initialFormState = {
     title: '',
@@ -121,9 +127,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const closeAdminModal = () => {
     setIsAdminModalOpen(false);
     setEditingAdminId(null);
-    setAdminEmailForm('');
-    setAdminPasswordForm('');
-    setAdminRoleForm(AdminRole.EDITOR);
+    setAdminFormData({ email: '', password: '', role: AdminRole.EDITOR });
   };
 
   const closeNoticeModal = () => {
@@ -255,17 +259,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const handleAdminSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canManageAdmins) return;
-    if (!adminEmailForm) return;
+    if (!adminFormData.email) return;
 
-    if (!editingAdminId && !adminPasswordForm) {
+    if (!editingAdminId && !adminFormData.password) {
       alert("A password is required when creating a new admin.");
       return;
     }
 
     if (editingAdminId) {
-      db.updateAdmin(editingAdminId, adminEmailForm, adminRoleForm, adminPasswordForm);
+      db.updateAdmin(editingAdminId, adminFormData);
     } else {
-      db.addAdmin(adminEmailForm, adminRoleForm, adminPasswordForm);
+      db.addAdmin(adminFormData);
     }
     
     setAdminList(db.getAdmins());
@@ -275,9 +279,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const handleEditAdmin = (admin: Admin) => {
     if (!canManageAdmins) return;
     setEditingAdminId(admin.id);
-    setAdminEmailForm(admin.email);
-    setAdminRoleForm(admin.role);
-    setAdminPasswordForm(''); // Don't show existing password
+    setAdminFormData({
+      email: admin.email,
+      role: admin.role,
+      password: '' // Don't show existing password
+    });
     setIsAdminModalOpen(true);
   };
 
@@ -455,10 +461,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
 
   const getRoleBadge = (role: AdminRole) => {
     switch (role) {
-      case AdminRole.FULL_ACCESS:
+      case AdminRole.ADMIN:
         return (
           <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-widest shadow-sm">
-            <ShieldCheck className="h-3.5 w-3.5 mr-1.5" /> Full Access
+            <ShieldCheck className="h-3.5 w-3.5 mr-1.5" /> Admin
           </span>
         );
       case AdminRole.EDITOR:
@@ -502,7 +508,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
           )}
           {activeTab === 'users' && canManageAdmins && (
             <button
-              onClick={() => { setEditingAdminId(null); setAdminEmailForm(''); setAdminPasswordForm(''); setAdminRoleForm(AdminRole.EDITOR); setIsAdminModalOpen(true); }}
+              onClick={() => { setEditingAdminId(null); setAdminFormData({ email: '', password: '', role: AdminRole.EDITOR }); setIsAdminModalOpen(true); }}
               className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all shadow-sm"
             >
               <Users className="h-4 w-4 text-red-700" />
@@ -939,8 +945,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                    <input
                     type="email"
                     required
-                    value={adminEmailForm}
-                    onChange={(e) => setAdminEmailForm(e.target.value)}
+                    value={adminFormData.email}
+                    onChange={(e) => setAdminFormData({ ...adminFormData, email: e.target.value })}
                     placeholder="name@winnerschurch.com"
                     className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-700 outline-none transition-all text-slate-900 font-bold placeholder-slate-400"
                   />
@@ -956,8 +962,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                    <input
                     type="text"
                     required={!editingAdminId}
-                    value={adminPasswordForm}
-                    onChange={(e) => setAdminPasswordForm(e.target.value)}
+                    value={adminFormData.password}
+                    onChange={(e) => setAdminFormData({ ...adminFormData, password: e.target.value })}
                     placeholder={editingAdminId ? "Leave blank to keep current" : "Create a strong password"}
                     className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-700 outline-none transition-all text-slate-900 font-bold placeholder-slate-400"
                   />
@@ -966,36 +972,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase ml-1">Access Control Level</label>
-                <div className="grid grid-cols-1 gap-2">
-                  {[
-                    { role: AdminRole.FULL_ACCESS, icon: ShieldAlert, desc: 'Complete system management rights.' },
-                    { role: AdminRole.EDITOR, icon: Edit3, desc: 'Manage media content only.' },
-                    { role: AdminRole.VIEWER, icon: Eye, desc: 'Read-only access to library & stats.' },
-                  ].map((item) => (
-                    <button
-                      key={item.role}
-                      type="button"
-                      onClick={() => setAdminRoleForm(item.role)}
-                      className={`flex items-start p-3 border-2 rounded-2xl transition-all text-left group ${
-                        adminRoleForm === item.role 
-                          ? 'border-red-600 bg-red-50' 
-                          : 'border-slate-100 bg-white hover:border-slate-200'
-                      }`}
-                    >
-                      <div className={`p-2 rounded-lg mr-3 ${adminRoleForm === item.role ? 'bg-red-700 text-white' : 'bg-slate-50 text-slate-400 group-hover:text-red-700'}`}>
-                        <item.icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className={`text-sm font-bold ${adminRoleForm === item.role ? 'text-red-900' : 'text-slate-700'}`}>{item.role}</p>
-                        <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">{item.desc}</p>
-                      </div>
-                      {adminRoleForm === item.role && (
-                        <div className="ml-auto">
-                          <CheckCircle className="h-5 w-5 text-red-600" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
+                <div className="relative">
+                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <select
+                    value={adminFormData.role}
+                    onChange={(e) => setAdminFormData({ ...adminFormData, role: e.target.value as AdminRole })}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-700 outline-none transition-all text-slate-900 font-bold appearance-none"
+                  >
+                    <option value={AdminRole.ADMIN}>Admin - Complete system management rights</option>
+                    <option value={AdminRole.EDITOR}>Editor - Manage media content only</option>
+                    <option value={AdminRole.VIEWER}>Viewer - Read-only access to library & stats</option>
+                  </select>
+                  <ArrowUpDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                 </div>
               </div>
 
@@ -1110,7 +1098,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                    ) : noticeForm.imageUrl ? (
                       <div className="relative group h-32 w-full">
                          <img src={noticeForm.imageUrl} className="w-full h-full object-cover rounded-xl" alt="Preview" />
-                         <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center rounded-xl backdrop-blur-sm">
+                         <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center rounded-xl backdrop-blur-sm gap-3">
                             <label className="cursor-pointer">
                                 <div className="bg-white/20 text-white px-3 py-1.5 rounded-lg backdrop-blur-md flex items-center space-x-2 border border-white/30 hover:bg-white/30 transition-all">
                                    <ImagePlus className="h-4 w-4" />
@@ -1118,6 +1106,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                                 </div>
                                 <input type="file" accept="image/*" className="hidden" onChange={handleNoticeImageChange} />
                             </label>
+                            <button
+                               type="button"
+                               onClick={() => setNoticeForm(prev => ({ ...prev, imageUrl: undefined }))}
+                               className="bg-red-500/80 text-white px-3 py-1.5 rounded-lg backdrop-blur-md flex items-center space-x-2 border border-red-500/30 hover:bg-red-500 transition-all"
+                            >
+                               <Trash2 className="h-4 w-4" />
+                               <span className="text-[10px] font-bold uppercase tracking-wide">Remove</span>
+                            </button>
                          </div>
                       </div>
                    ) : (

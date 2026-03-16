@@ -8,7 +8,7 @@ export enum Category {
 }
 
 export enum AdminRole {
-  FULL_ACCESS = 'Full Access',
+  ADMIN = 'Admin',
   EDITOR = 'Editor',
   VIEWER = 'Viewer'
 }
