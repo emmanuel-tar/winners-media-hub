@@ -30,7 +30,7 @@ const Home: React.FC<HomeProps> = ({ onPlay }) => {
     const startDate = new Date(notice.date).toISOString().split('T')[0];
     const endDate = new Date(new Date(notice.date).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
-    const url = `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&startdt=${startDate}&enddt=${endDate}&subject=${encodeURIComponent(notice.title)}&body=${encodeURIComponent(notice.message)}`;
+    const url = `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&allday=true&startdt=${startDate}&enddt=${endDate}&subject=${encodeURIComponent(notice.title)}&body=${encodeURIComponent(notice.message)}`;
     window.open(url, '_blank');
   };
 
@@ -38,17 +38,23 @@ const Home: React.FC<HomeProps> = ({ onPlay }) => {
     const startDate = new Date(notice.date).toISOString().replace(/-|:|\.\d\d\d/g, "");
     const endDate = new Date(new Date(notice.date).getTime() + 24 * 60 * 60 * 1000).toISOString().replace(/-|:|\.\d\d\d/g, "");
     
-    const icsContent = `BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VEVENT
-URL:${window.location.href}
-DTSTART:${startDate}
-DTEND:${endDate}
-SUMMARY:${notice.title}
-DESCRIPTION:${notice.message}
-LOCATION:Living Faith Church, Agric Ikorodu
-END:VEVENT
-END:VCALENDAR`;
+    // Escape newlines and commas for ICS format
+    const description = notice.message.replace(/\n/g, '\\n').replace(/,/g, '\\,');
+    const title = notice.title.replace(/,/g, '\\,');
+    
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      `URL:${window.location.href}`,
+      `DTSTART:${startDate}`,
+      `DTEND:${endDate}`,
+      `SUMMARY:${title}`,
+      `DESCRIPTION:${description}`,
+      'LOCATION:Living Faith Church\\, Agric Ikorodu',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
 
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const link = document.createElement('a');
