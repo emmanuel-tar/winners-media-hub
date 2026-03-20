@@ -2,6 +2,7 @@
 import React from 'react';
 import { Search, Filter, Play, Download, Calendar, User, SlidersHorizontal, History, X, Trash2 } from 'lucide-react';
 import { db } from '../services/db';
+import { getFile } from '../services/storage';
 import { Media, Category } from '../types';
 
 interface LibraryProps {
@@ -90,15 +91,37 @@ const Library: React.FC<LibraryProps> = ({ onPlay }) => {
     localStorage.removeItem(SEARCH_HISTORY_KEY);
   };
 
-  const handleDownload = (e: React.MouseEvent, media: Media) => {
+  const handleDownload = async (e: React.MouseEvent, media: Media) => {
     e.stopPropagation();
     db.incrementDownload(media.id);
+    
+    let downloadUrl = media.fileUrl;
+    let objectUrl: string | null = null;
+    
+    if (media.fileUrl.startsWith('indexeddb://')) {
+      const fileId = media.fileUrl.replace('indexeddb://', '');
+      try {
+        const blob = await getFile(fileId);
+        if (blob) {
+          objectUrl = URL.createObjectURL(blob);
+          downloadUrl = objectUrl;
+        }
+      } catch (err) {
+        console.error("Failed to load file for download:", err);
+        return;
+      }
+    }
+
     const link = document.createElement('a');
-    link.href = media.fileUrl;
+    link.href = downloadUrl;
     link.download = `${media.title}.mp3`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    if (objectUrl) {
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    }
   };
 
   return (

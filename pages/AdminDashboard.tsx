@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { Plus, Trash2, Edit3, BarChart3, Upload, Loader2, Sparkles, CheckCircle, X, ImagePlus, FileImage, Play, Headphones, CloudUpload, User, Calendar, Download, Users, ShieldCheck, Mail, AlertCircle, Save, ShieldAlert, Eye, Lock, ArrowUp, ArrowDown, ArrowUpDown, Search, Bell, Megaphone, KeyRound } from 'lucide-react';
+import { Plus, Trash2, Edit3, BarChart3, Upload, Loader2, Sparkles, CheckCircle, X, ImagePlus, FileImage, Play, Headphones, CloudUpload, User, Calendar, Download, Users, ShieldCheck, Mail, AlertCircle, Save, ShieldAlert, Eye, EyeOff, Lock, ArrowUp, ArrowDown, ArrowUpDown, Search, Bell, Megaphone, KeyRound } from 'lucide-react';
 import { db } from '../services/db';
+import { saveFile, deleteFile } from '../services/storage';
 import { geminiService } from '../services/gemini';
 import { Media, Category, Admin, AdminRole, Notice } from '../types';
 
@@ -48,6 +49,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   const [isUploadingFile, setIsUploadingFile] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState(0);
   const [showSuccess, setShowSuccess] = React.useState(false);
+  const [uploadedFileUrl, setUploadedFileUrl] = React.useState<string | null>(null);
+  const [uploadedThumbUrl, setUploadedThumbUrl] = React.useState<string | null>(null);
   
   // Thumbnail Upload States
   const [isUploadingThumb, setIsUploadingThumb] = React.useState(false);
@@ -56,8 +59,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
   // Notice Image State
   const [isUploadingNoticeThumb, setIsUploadingNoticeThumb] = React.useState(false);
 
+  const [uploadedNoticeImageUrl, setUploadedNoticeImageUrl] = React.useState<string | null>(null);
+
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editingAdminId, setEditingAdminId] = React.useState<string | null>(null);
+  const [showAdminPassword, setShowAdminPassword] = React.useState(false);
   const [errors, setErrors] = React.useState<FormErrors>({});
   
   const [adminFormData, setAdminFormData] = React.useState<{
@@ -112,7 +118,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setNoticeList(db.getNotices());
   }, []);
 
-  const closeModal = () => {
+  const closeModal = (skipCleanup: boolean = false) => {
+    if (skipCleanup !== true) {
+      if (uploadedFileUrl && uploadedFileUrl.startsWith('indexeddb://')) {
+        const fileId = uploadedFileUrl.replace('indexeddb://', '');
+        deleteFile(fileId).catch(e => console.error("Failed to cleanup orphaned file:", e));
+      }
+      if (uploadedThumbUrl && uploadedThumbUrl.startsWith('indexeddb://')) {
+        const thumbId = uploadedThumbUrl.replace('indexeddb://', '');
+        deleteFile(thumbId).catch(e => console.error("Failed to cleanup orphaned thumbnail:", e));
+      }
+    }
     setIsModalOpen(false);
     setEditingId(null);
     setFormData(initialFormState);
@@ -122,6 +138,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setShowSuccess(false);
     setShowThumbSuccess(false);
     setErrors({});
+    setUploadedFileUrl(null);
+    setUploadedThumbUrl(null);
   };
 
   const closeAdminModal = () => {
@@ -130,7 +148,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setAdminFormData({ email: '', password: '', role: AdminRole.EDITOR });
   };
 
-  const closeNoticeModal = () => {
+  const closeNoticeModal = (skipCleanup: boolean = false) => {
+    if (skipCleanup !== true && uploadedNoticeImageUrl && uploadedNoticeImageUrl.startsWith('indexeddb://')) {
+      const fileId = uploadedNoticeImageUrl.replace('indexeddb://', '');
+      deleteFile(fileId).catch(e => console.error("Failed to cleanup orphaned notice image:", e));
+    }
     setIsNoticeModalOpen(false);
     setNoticeForm({
         title: '',
@@ -142,6 +164,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     });
     setIsUploadingNoticeThumb(false);
     setErrors({});
+    setUploadedNoticeImageUrl(null);
   };
 
   const validate = (): boolean => {
@@ -217,9 +240,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
       : <ArrowDown className="h-3 w-3 text-red-600 ml-1.5" />;
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!canEditMedia) return;
     if (confirm('Are you sure you want to permanently delete this media from the library?')) {
+      const media = mediaList.find(m => m.id === id);
+      if (media) {
+        if (media.fileUrl.startsWith('indexeddb://')) {
+          const fileId = media.fileUrl.replace('indexeddb://', '');
+          try {
+            await deleteFile(fileId);
+          } catch (e) {
+            console.error("Failed to delete file from IndexedDB:", e);
+          }
+        }
+        if (media.thumbnailUrl.startsWith('indexeddb://')) {
+          const thumbId = media.thumbnailUrl.replace('indexeddb://', '');
+          try {
+            await deleteFile(thumbId);
+          } catch (e) {
+            console.error("Failed to delete thumbnail from IndexedDB:", e);
+          }
+        }
+      }
       db.deleteMedia(id);
       setMediaList(db.getMedia());
     }
@@ -243,6 +285,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setShowThumbSuccess(true);
     setIsModalOpen(true);
     setErrors({});
+    setUploadedFileUrl(null);
+    setUploadedThumbUrl(null);
   };
 
   const handleAddNew = () => {
@@ -254,6 +298,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setShowThumbSuccess(false);
     setIsModalOpen(true);
     setErrors({});
+    setUploadedFileUrl(null);
+    setUploadedThumbUrl(null);
+  };
+
+  const handleAddNewNotice = () => {
+    if (!canManageNotices) return;
+    setNoticeForm({
+        title: '',
+        message: '',
+        date: new Date().toISOString().split('T')[0],
+        priority: 'Normal',
+        active: true,
+        imageUrl: ''
+    });
+    setUploadedNoticeImageUrl(null);
+    setIsNoticeModalOpen(true);
   };
 
   const handleAdminSubmit = (e: React.FormEvent) => {
@@ -301,17 +361,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     if (!noticeForm.title || !noticeForm.message) return;
     
     if (noticeForm.id) {
+      const originalNotice = noticeList.find(n => n.id === noticeForm.id);
+      if (originalNotice && originalNotice.imageUrl !== noticeForm.imageUrl && originalNotice.imageUrl?.startsWith('indexeddb://')) {
+        const oldFileId = originalNotice.imageUrl.replace('indexeddb://', '');
+        deleteFile(oldFileId).catch(error => console.error("Failed to delete old notice image:", error));
+      }
       db.updateNotice(noticeForm.id, noticeForm);
     } else {
       db.addNotice(noticeForm);
     }
     setNoticeList(db.getNotices());
-    closeNoticeModal();
+    closeNoticeModal(true);
   };
 
   const handleDeleteNotice = (id: string) => {
     if (!canManageNotices) return;
     if (confirm('Delete this announcement?')) {
+      const notice = noticeList.find(n => n.id === id);
+      if (notice && notice.imageUrl?.startsWith('indexeddb://')) {
+        const fileId = notice.imageUrl.replace('indexeddb://', '');
+        deleteFile(fileId).catch(e => console.error("Failed to delete notice image:", e));
+      }
       db.deleteNotice(id);
       setNoticeList(db.getNotices());
     }
@@ -335,7 +405,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     setIsGenerating(false);
   };
 
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEditMedia) return;
     const file = e.target.files?.[0];
     if (file) {
@@ -352,22 +422,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
       setIsUploadingThumb(true);
       setShowThumbSuccess(false);
       
-      // Use FileReader to store actual Base64 data for persistence
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        // Simulate network delay for better UX
-        setTimeout(() => {
-            const base64String = reader.result as string;
-            setFormData(prev => ({ ...prev, thumbnailUrl: base64String }));
-            setIsUploadingThumb(false);
-            setShowThumbSuccess(true);
-        }, 1200);
-      };
-      reader.readAsDataURL(file);
+      try {
+        // Cleanup previous uploaded thumbnail if user changes mind
+        if (uploadedThumbUrl && uploadedThumbUrl.startsWith('indexeddb://')) {
+          const oldFileId = uploadedThumbUrl.replace('indexeddb://', '');
+          deleteFile(oldFileId).catch(e => console.error("Failed to cleanup previous thumbnail:", e));
+        }
+
+        const fileId = `thumb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const storageUrl = await saveFile(fileId, file);
+        
+        setUploadedThumbUrl(storageUrl);
+        setFormData(prev => ({ ...prev, thumbnailUrl: storageUrl }));
+        setIsUploadingThumb(false);
+        setShowThumbSuccess(true);
+      } catch (error) {
+        console.error("Error saving thumbnail:", error);
+        setErrors(prev => ({ ...prev, thumbnailUrl: "Failed to save thumbnail. Please try again." }));
+        setIsUploadingThumb(false);
+      }
     }
   };
 
-  const handleNoticeImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNoticeImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
      if (!canManageNotices) return;
      const file = e.target.files?.[0];
      if (file) {
@@ -384,19 +461,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
          return;
        }
        setIsUploadingNoticeThumb(true);
-       const reader = new FileReader();
-       reader.onloadend = () => {
-         setTimeout(() => {
-            const base64String = reader.result as string;
-            setNoticeForm(prev => ({ ...prev, imageUrl: base64String }));
-            setIsUploadingNoticeThumb(false);
-         }, 800);
-       };
-       reader.readAsDataURL(file);
+       
+       try {
+         if (uploadedNoticeImageUrl && uploadedNoticeImageUrl.startsWith('indexeddb://')) {
+           const oldFileId = uploadedNoticeImageUrl.replace('indexeddb://', '');
+           deleteFile(oldFileId).catch(e => console.error("Failed to cleanup previous notice image:", e));
+         }
+
+         const fileId = `notice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+         const storageUrl = await saveFile(fileId, file);
+         
+         setUploadedNoticeImageUrl(storageUrl);
+         setNoticeForm(prev => ({ ...prev, imageUrl: storageUrl }));
+         setIsUploadingNoticeThumb(false);
+       } catch (error) {
+         console.error("Error saving notice image:", error);
+         setErrors(prev => ({ ...prev, noticeImage: "Failed to save image. Please try again." }));
+         setIsUploadingNoticeThumb(false);
+       }
      }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEditMedia) return;
     const file = e.target.files?.[0];
     if (file) {
@@ -411,6 +497,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
         return;
       }
 
+      const MAX_AUDIO_SIZE = 100 * 1024 * 1024; // 100MB
       if (file.size > MAX_AUDIO_SIZE) {
         setErrors(prev => ({ ...prev, fileUrl: "File too large. Maximum allowed size is 100MB." }));
         e.target.value = '';
@@ -419,25 +506,53 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
 
       setIsUploadingFile(true);
       
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += Math.random() * 20;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(interval);
-          
-          const objectUrl = URL.createObjectURL(file);
-          setFormData(prev => ({
-            ...prev,
-            fileUrl: objectUrl
-          }));
-          setIsUploadingFile(false);
-          setUploadProgress(100);
-          setShowSuccess(true);
-        } else {
-          setUploadProgress(Math.floor(progress));
+      try {
+        // Cleanup previous uploaded file if user changes mind
+        if (uploadedFileUrl && uploadedFileUrl.startsWith('indexeddb://')) {
+          const oldFileId = uploadedFileUrl.replace('indexeddb://', '');
+          deleteFile(oldFileId).catch(e => console.error("Failed to cleanup previous file:", e));
         }
-      }, 150);
+
+        // Simulate upload progress
+        const interval = setInterval(() => {
+          setUploadProgress(prev => {
+            const next = prev + Math.random() * 20;
+            return next >= 90 ? 90 : next;
+          });
+        }, 150);
+
+        const fileId = `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const storageUrl = await saveFile(fileId, file);
+        
+        // Extract duration
+        const objectUrl = URL.createObjectURL(file);
+        const audio = new Audio(objectUrl);
+        audio.onloadedmetadata = () => {
+          const totalSeconds = Math.floor(audio.duration);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+          setFormData(prev => ({ ...prev, duration: formattedDuration }));
+          URL.revokeObjectURL(objectUrl);
+        };
+        
+        clearInterval(interval);
+        setUploadProgress(100);
+        
+        setUploadedFileUrl(storageUrl);
+        setFormData(prev => ({
+          ...prev,
+          fileUrl: storageUrl
+        }));
+        
+        setIsUploadingFile(false);
+        setShowSuccess(true);
+      } catch (error) {
+        console.error("Error saving file:", error);
+        setErrors(prev => ({ ...prev, fileUrl: "Failed to save file. Please try again." }));
+        setIsUploadingFile(false);
+        setUploadProgress(0);
+      }
     }
   };
 
@@ -447,13 +562,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
     if (!validate()) return;
 
     if (editingId) {
+      const originalMedia = mediaList.find(m => m.id === editingId);
+      if (originalMedia) {
+        if (originalMedia.fileUrl !== formData.fileUrl && originalMedia.fileUrl.startsWith('indexeddb://')) {
+          const oldFileId = originalMedia.fileUrl.replace('indexeddb://', '');
+          deleteFile(oldFileId).catch(error => console.error("Failed to delete old file from IndexedDB:", error));
+        }
+        if (originalMedia.thumbnailUrl !== formData.thumbnailUrl && originalMedia.thumbnailUrl.startsWith('indexeddb://')) {
+          const oldThumbId = originalMedia.thumbnailUrl.replace('indexeddb://', '');
+          deleteFile(oldThumbId).catch(error => console.error("Failed to delete old thumbnail from IndexedDB:", error));
+        }
+      }
       db.updateMedia(editingId, formData);
     } else {
       db.addMedia(formData);
     }
     
     setMediaList(db.getMedia());
-    closeModal();
+    closeModal(true); // skip cleanup since we saved it
   };
 
   const totalPlays = mediaList.reduce((acc, m) => acc + m.playCount, 0);
@@ -499,7 +625,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
         <div className="flex gap-3">
            {activeTab === 'notices' && canManageNotices && (
             <button
-              onClick={() => setIsNoticeModalOpen(true)}
+              onClick={handleAddNewNotice}
               className="flex items-center space-x-2 px-4 py-2 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 transition-all shadow-lg shadow-amber-100"
             >
               <Megaphone className="h-4 w-4" />
@@ -821,6 +947,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                             <button 
                               onClick={() => {
                                 setNoticeForm(notice);
+                                setUploadedNoticeImageUrl(null);
                                 setIsNoticeModalOpen(true);
                               }}
                               className="flex items-center space-x-1.5 px-3 py-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-50 hover:text-amber-700 transition-all shadow-sm"
@@ -960,13 +1087,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPlay, currentUser }) 
                 <div className="relative">
                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                    <input
-                    type="text"
+                    type={showAdminPassword ? "text" : "password"}
                     required={!editingAdminId}
                     value={adminFormData.password}
                     onChange={(e) => setAdminFormData({ ...adminFormData, password: e.target.value })}
                     placeholder={editingAdminId ? "Leave blank to keep current" : "Create a strong password"}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-700 outline-none transition-all text-slate-900 font-bold placeholder-slate-400"
+                    className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-700 outline-none transition-all text-slate-900 font-bold placeholder-slate-400"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-red-700 transition-colors"
+                  >
+                    {showAdminPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 

@@ -3,6 +3,7 @@ import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Download, X } from 'lucide-react';
 import { Media } from '../types';
 import { db } from '../services/db';
+import { getFile } from '../services/storage';
 
 interface AudioPlayerProps {
   media: Media | null;
@@ -13,17 +14,56 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ media, onClose }) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
   const [volume, setVolume] = React.useState(80);
+  const [audioSrc, setAudioSrc] = React.useState<string>('');
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   React.useEffect(() => {
-    if (media) {
+    let objectUrl: string | null = null;
+
+    const loadAudio = async () => {
+      if (!media) {
+        setAudioSrc('');
+        return;
+      }
+
+      if (media.fileUrl.startsWith('indexeddb://')) {
+        const fileId = media.fileUrl.replace('indexeddb://', '');
+        try {
+          const blob = await getFile(fileId);
+          if (blob) {
+            objectUrl = URL.createObjectURL(blob);
+            setAudioSrc(objectUrl);
+          } else {
+            console.error("Audio file not found in IndexedDB");
+            setAudioSrc('');
+          }
+        } catch (e) {
+          console.error("Failed to load audio from IndexedDB:", e);
+          setAudioSrc('');
+        }
+      } else {
+        setAudioSrc(media.fileUrl);
+      }
+    };
+
+    loadAudio();
+
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [media]);
+
+  React.useEffect(() => {
+    if (media && audioSrc) {
       setIsPlaying(true);
       db.incrementPlay(media.id);
       if (audioRef.current) {
-        audioRef.current.play();
+        audioRef.current.play().catch(e => console.error("Playback failed:", e));
       }
     }
-  }, [media]);
+  }, [media, audioSrc]);
 
   const togglePlay = () => {
     if (audioRef.current) {
@@ -48,15 +88,37 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ media, onClose }) => {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (media) {
       db.incrementDownload(media.id);
+      
+      let downloadUrl = media.fileUrl;
+      let objectUrl: string | null = null;
+      
+      if (media.fileUrl.startsWith('indexeddb://')) {
+        const fileId = media.fileUrl.replace('indexeddb://', '');
+        try {
+          const blob = await getFile(fileId);
+          if (blob) {
+            objectUrl = URL.createObjectURL(blob);
+            downloadUrl = objectUrl;
+          }
+        } catch (e) {
+          console.error("Failed to load file for download:", e);
+          return;
+        }
+      }
+
       const link = document.createElement('a');
-      link.href = media.fileUrl;
+      link.href = downloadUrl;
       link.download = `${media.title}.mp3`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      if (objectUrl) {
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
     }
   };
 
@@ -66,7 +128,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ media, onClose }) => {
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-[100] transform transition-transform duration-300">
       <audio
         ref={audioRef}
-        src={media.fileUrl}
+        src={audioSrc}
         onTimeUpdate={handleTimeUpdate}
         onEnded={() => setIsPlaying(false)}
       />
